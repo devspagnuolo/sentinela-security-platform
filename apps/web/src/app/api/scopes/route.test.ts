@@ -9,6 +9,7 @@ import { request, signIn, TEST_PASSWORD } from "@/test/auth";
 const assess = vi.fn();
 vi.mock("@/lib/scanner", () => ({
   SCANNER_METHOD_ID: "TEST",
+  TransientAssessmentError: class extends Error {},
   assess: (...args: unknown[]) => assess(...args),
   validateTarget: async (raw: string) => ({ url: new URL(raw), addresses: [{ address: "93.184.216.34", family: 4 }] })
 }));
@@ -21,6 +22,8 @@ const { POST: ASSESS } = await import("../assets/[id]/assess/route");
 const { GET: FINDINGS } = await import("../findings/route");
 const { PATCH: TRIAGE } = await import("../findings/[id]/route");
 const { GET: EVENTS } = await import("../findings/[id]/events/route");
+const { GET: RUN } = await import("../assessments/[id]/route");
+const { drainQueue } = await import("@/lib/worker");
 
 const ctx = {} as never;
 const idCtx = (id: string) => ({ params: Promise.resolve({ id }) }) as never;
@@ -79,9 +82,15 @@ describe("autorizações de escopo", () => {
     expect((await ASSET(request("/api/assets", { cookie: analyst.cookie, body: { url: "https://legado.acme.example", authorizationId: scope.id } }), ctx)).status).toBe(400);
 
     assess.mockResolvedValueOnce([{ title: "HSTS ausente", severity: "low", category: "HTTP Headers", description: "d", evidence: "e", recommendation: "r", references: [] }]);
-    const run = await ASSESS(request(`/api/assets/${asset.id}/assess`, { cookie: analyst.cookie, body: {} }), idCtx(asset.id));
-    expect(run.status).toBe(200);
-    const [finding] = (await run.json()).findings;
+    const queued = await ASSESS(request(`/api/assets/${asset.id}/assess`, { cookie: analyst.cookie, body: {} }), idCtx(asset.id));
+    expect(queued.status).toBe(202);
+    const { assessment } = await queued.json();
+    expect(assessment).toMatchObject({ status: "queued", trigger: "manual", requestedBy: { id: analyst.user.id } });
+    await drainQueue(await getDb());
+    const done = await (await RUN(request(`/api/assessments/${assessment.id}`, { cookie: analyst.cookie }), idCtx(assessment.id))).json();
+    expect(done).toMatchObject({ status: "completed", summary: { observed: 1, created: 1 } });
+    const [finding] = await (await FINDINGS(request(`/api/findings?assetId=${asset.id}`, { cookie: analyst.cookie }), ctx)).json();
+    expect(done.findingIds).toEqual([finding.id]);
 
     // Triagem: analista marca falso positivo, mas não aceita risco.
     const accept = { status: "accepted", reason: "Mitigado por WAF.", acceptedUntil: inDays(60) };

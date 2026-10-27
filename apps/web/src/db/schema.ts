@@ -10,6 +10,7 @@ export const severityEnum = pgEnum("severity", ["critical", "high", "medium", "l
 export const assessmentStatusEnum = pgEnum("assessment_status", ["queued", "running", "completed", "failed"]);
 export const findingStatusEnum = pgEnum("finding_status", ["open", "accepted", "fixed", "false_positive"]);
 export const authorizationStatusEnum = pgEnum("authorization_status", ["pending", "approved", "revoked"]);
+export const assessmentTriggerEnum = pgEnum("assessment_trigger", ["manual", "scheduled"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -112,6 +113,8 @@ export const authorizations = pgTable("authorizations", {
   revokedBy: uuid("revoked_by").references(() => users.id, { onDelete: "set null" }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   revokeReason: text("revoke_reason"),
+  // Quando o aviso de vencimento próximo foi enviado (uma vez por autorização).
+  expiryNotifiedAt: timestamp("expiry_notified_at", { withTimezone: true }),
   ...timestamps
 }, t => [index("authorizations_org_idx").on(t.organizationId)]);
 
@@ -126,19 +129,41 @@ export const assets = pgTable("assets", {
   owner: text("owner").notNull(),
   // Cópia da referência da autorização no momento do cadastro (aparece nos relatórios).
   authorizationRef: text("authorization_ref").notNull(),
+  // Reavaliação periódica: null = só manual. O worker enfileira quando next_assessment_at chega.
+  scheduleIntervalDays: integer("schedule_interval_days"),
+  nextAssessmentAt: timestamp("next_assessment_at", { withTimezone: true }),
   ...timestamps
-}, t => [index("assets_org_created_idx").on(t.organizationId, t.createdAt)]);
+}, t => [
+  index("assets_org_created_idx").on(t.organizationId, t.createdAt),
+  index("assets_next_assessment_idx").on(t.nextAssessmentAt).where(sql`${t.nextAssessmentAt} is not null`)
+]);
 
+// Cada linha é ao mesmo tempo o job da fila (queued → running) e o registro da execução (completed | failed).
 export const assessments = pgTable("assessments", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: orgRef(),
   assetId: uuid("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
   status: assessmentStatusEnum("status").notNull(),
+  trigger: assessmentTriggerEnum("trigger").notNull().default("manual"),
+  requestedBy: uuid("requested_by").references(() => users.id, { onDelete: "set null" }),
   method: text("method").notNull(),
   error: text("error"),
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  attempts: integer("attempts").notNull().default(0),
+  // Não processar antes deste instante (novas tentativas usam espera crescente).
+  runAfter: timestamp("run_after", { withTimezone: true }).notNull().defaultNow(),
+  // Quando um worker pegou o job; running com locked_at antigo é considerado travado e volta para a fila.
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  summary: jsonb("summary").$type<{ observed: number; created: number; reopened: number; resolved: number }>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
   finishedAt: timestamp("finished_at", { withTimezone: true })
-}, t => [index("assessments_org_asset_idx").on(t.organizationId, t.assetId, t.startedAt)]);
+}, t => [
+  index("assessments_org_asset_idx").on(t.organizationId, t.assetId, t.startedAt),
+  index("assessments_org_created_idx").on(t.organizationId, t.createdAt),
+  index("assessments_queue_idx").on(t.runAfter).where(sql`${t.status} = 'queued'`),
+  // No máximo uma avaliação pendente ou em execução por ativo.
+  uniqueIndex("assessments_active_asset_idx").on(t.assetId).where(sql`${t.status} in ('queued', 'running')`)
+]);
 
 export const findings = pgTable("findings", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -237,3 +262,16 @@ export const ssoRequests = pgTable("sso_requests", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
+
+// Avisos dentro da aplicação, um por destinatário (lidos individualmente).
+export const notifications = pgTable("notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: orgRef(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull().default(""),
+  link: text("link"),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, t => [index("notifications_user_idx").on(t.organizationId, t.userId, t.createdAt)]);

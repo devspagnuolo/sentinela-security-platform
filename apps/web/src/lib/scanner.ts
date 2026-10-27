@@ -96,12 +96,18 @@ export function analyzeResponse(asset: Pick<Asset, "url">, response: ObservedRes
 
 export type AssessDeps = { config?: ScannerConfig; resolve?: Resolver; fetcher?: Fetcher };
 
+/** Falha de rede ao contatar o alvo (tempo limite, conexão recusada): vale tentar de novo mais tarde. */
+export class TransientAssessmentError extends Error {}
+
 export async function assess(asset: Pick<Asset, "url">, deps: AssessDeps = {}): Promise<Observation[]> {
   const config = deps.config ?? scannerConfig();
   if (!config.enabled) throw new Error("Scanner desabilitado. Configure o ambiente antes de executar avaliações.");
   const { url, addresses } = await validateTarget(asset.url, deps.resolve);
   if (!isHostAllowed(url.hostname, config)) throw new Error("O hostname não consta na lista de alvos autorizados pelo operador.");
-  const response = await (deps.fetcher ?? pinnedFetch)(url, addresses[0]);
+  let response: ObservedResponse;
+  try { response = await (deps.fetcher ?? pinnedFetch)(url, addresses[0]); } catch (error) {
+    throw new TransientAssessmentError(error instanceof Error ? error.message : "Falha de rede ao contatar o alvo.");
+  }
   if (response.status >= 300 && response.status < 400) throw new Error("O alvo respondeu com redirecionamento; o MVP não segue redirects.");
   return analyzeResponse(asset, response);
 }

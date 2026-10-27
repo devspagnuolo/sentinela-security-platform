@@ -28,6 +28,8 @@ const ACTION_LABELS: Record<string, string> = {
   "scope.approved": "Escopo aprovado",
   "scope.revoked": "Escopo revogado",
   "asset.created": "Ativo cadastrado",
+  "asset.schedule_updated": "Agenda de reavaliação alterada",
+  "assessment.queued": "Avaliação enfileirada",
   "assessment.completed": "Avaliação concluída",
   "assessment.failed": "Avaliação com falha",
   "assessment.blocked": "Avaliação bloqueada (fora do escopo)",

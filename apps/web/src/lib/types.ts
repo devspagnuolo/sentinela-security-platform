@@ -14,6 +14,10 @@ export type Asset = {
   scopeOk: boolean;
   scopeMessage: string | null;
   scopeValidUntil: string | null;
+  /** Reavaliação periódica (null = só manual) e a próxima execução prevista. */
+  scheduleIntervalDays: number | null;
+  nextAssessmentAt: string | null;
+  lastAssessment: Pick<Assessment, "id" | "status" | "error" | "createdAt" | "finishedAt"> | null;
   createdAt: string;
 };
 export type Finding = {
@@ -54,4 +58,21 @@ export type Authorization = {
   assetCount: number;
   createdAt: string;
 };
-export type Assessment = { id: string; assetId: string; status: "completed"; startedAt: string; findingIds: string[] };
+export type AssessmentStatus = "queued" | "running" | "completed" | "failed";
+export type AssessmentSummary = { observed: number; created: number; reopened: number; resolved: number };
+export type Assessment = {
+  id: string;
+  assetId: string;
+  assetName?: string;
+  status: AssessmentStatus;
+  trigger: "manual" | "scheduled";
+  requestedBy: { id: string; name: string } | null;
+  attempts: number;
+  error: string | null;
+  summary: AssessmentSummary | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  findingIds: string[];
+};
+export type Notification = { id: string; kind: string; title: string; body: string; link: string | null; readAt: string | null; createdAt: string };

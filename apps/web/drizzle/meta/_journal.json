@@ -36,6 +36,13 @@
       "when": 1793127989400,
       "tag": "0004_scopes_findings",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793129992907,
+      "tag": "0005_worker_notifications",
+      "breakpoints": true
     }
   ]
 }

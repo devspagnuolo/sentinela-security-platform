@@ -32,10 +32,25 @@ A ausência de cabeçalho ou um banner é um indicador de configuração, não p
 
 ## Limites atuais
 
-Sem aprovação com validade aplicada pelo scanner, varredura TLS, descoberta ampla, testes autenticados, cloud, PDF gerado no servidor ou IA. O protótipo não deve receber dados reais de clientes nem ser exposto publicamente até que os controles essenciais estejam implementados.
+Sem varredura TLS, descoberta ampla, testes autenticados, cloud, PDF gerado no servidor ou IA. O protótipo não deve receber dados reais de clientes nem ser exposto publicamente até que os controles essenciais estejam implementados.
 
 ## Escopos e ciclo de vida dos achados
 
 `authorizations` guarda a autorização de escopo, com status `pending`, `approved` ou `revoked`, hostnames e exclusões (`text[]`) e a janela `valid_from`/`valid_until`. A decisão é tomada por funções puras em `src/lib/scope.ts` (`evaluateScope`): aprovada, dentro da janela, hostname coberto por um padrão exato ou `*.dominio` e fora das exclusões. Ela vale no cadastro do ativo (`assets.authorization_id`) e de novo imediatamente antes de cada avaliação. Uma tentativa bloqueada gera `assessment.blocked` na auditoria, sem nenhuma requisição ao alvo. A aprovação exige `scope:approve` e outra pessoa; o Owner pode aprovar a própria autorização, e isso fica auditado com `selfApproved`.
 
 `findings` tem um registro por (organização, ativo, `fingerprint`), em que a impressão digital é `categoria|título` normalizados. `assessment_findings` liga cada execução aos achados que ela observou, com a evidência daquela execução. `recordAssessment` consolida tudo numa transação: cria os novos, atualiza os conhecidos, reabre os `fixed` que voltaram e marca como `fixed` os `open`/`accepted` que não apareceram. `false_positive` não muda automaticamente. Aceites de risco têm `accepted_until`; ao listar ou avaliar, os vencidos voltam a `open`. Toda transição gera uma linha em `finding_events` (somente inserção) e, quando é manual, também em `audit_log`. A migração `0004` consolida os achados duplicados de versões anteriores.
+
+## Fila de avaliações, agenda e notificações
+
+A tabela `assessments` é a fila e também o registro de cada execução. `queued` → `running` → `completed` | `failed`, com `trigger` (`manual` ou `scheduled`), `requested_by`, `attempts`, `run_after`, `locked_at` e `summary` (observados, novos, reabertos e corrigidos). Um índice único parcial garante no máximo uma execução pendente ou em andamento por ativo; pedir de novo devolve a existente.
+
+O worker (`src/lib/worker.ts`) é iniciado por `src/instrumentation.ts` em cada processo Node e roda a cada `SENTINELA_WORKER_POLL_MS` (padrão 5 s). A rota de avaliação também o acorda na hora. A cada ciclo, ele faz o seguinte:
+
+1. Devolve à fila jobs presos em `running` há mais de 10 minutos; depois de 3 tentativas, marca como falha.
+2. Enfileira os ativos cuja `next_assessment_at` venceu e já grava a próxima data.
+3. Uma vez por minuto, expira aceites de risco, avisa sobre escopos que vencem em até 14 dias (uma vez por autorização, `expiry_notified_at`) e apaga avisos lidos há mais de 90 dias.
+4. Pega jobs com `UPDATE … WHERE id = (SELECT … FOR UPDATE SKIP LOCKED LIMIT 1)`. A subconsulta escalar é avaliada uma vez; com `IN`, o Postgres pode reavaliá-la por linha e marcar vários jobs de uma vez.
+
+Ao executar, o worker carrega o ativo e avalia o escopo de novo. Se o escopo não libera, registra `assessment.blocked` e falha sem contatar o alvo. Erros de rede (`TransientAssessmentError`) voltam à fila com espera de 1, 2 e 4 minutos; os demais erros falham na hora.
+
+`notifications` guarda um aviso por destinatário (`read_at` individual). `notify` escolhe os membros ativos por público. A operação (Owner, Admin e Analista) recebe achados altos ou críticos novos e reaberturas, e falhas de execuções agendadas. A gestão (Owner e Admin) recebe escopos pendentes (exceto quem cadastrou), escopos vencendo e aceites de risco vencidos. A falha de uma avaliação manual vai para quem a pediu.

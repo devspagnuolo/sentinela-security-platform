@@ -1,6 +1,6 @@
 import type { Instrumentation } from "next";
 
-/** Executado uma vez ao iniciar o servidor: valida a configuração e aplica migrações antes do primeiro acesso. */
+/** Executado uma vez ao iniciar o servidor: valida a configuração, aplica migrações e inicia o worker. */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { logger } = await import("@/lib/logger");
@@ -14,6 +14,9 @@ export async function register() {
       logger.error("server.database_init_failed", { error });
     }
   }
+  // Worker de avaliações e tarefas periódicas no mesmo processo (SENTINELA_WORKER=0 desliga).
+  const [{ startWorker }, { getDb }] = await Promise.all([import("@/lib/worker"), import("@/db/client")]);
+  startWorker(getDb);
 }
 
 export const onRequestError: Instrumentation.onRequestError = async (error, request, context) => {
