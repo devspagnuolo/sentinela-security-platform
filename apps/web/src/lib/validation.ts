@@ -119,3 +119,5 @@ const webhookUrl = z.string().trim().max(2000).superRefine((value, ctx) => { con
 export const webhookSchema = z.object({ name: z.string().trim().min(2, "Dê um nome ao webhook.").max(80), url: webhookUrl, events: webhookEvents });
 export const webhookUpdateSchema = z.object({ name: webhookSchema.shape.name.optional(), url: webhookUrl.optional(), events: webhookEvents.optional(), enabled: z.boolean().optional() })
   .refine(v => Object.values(v).some(x => x !== undefined), "Nada para alterar.");
+
+export const preferencesSchema = z.object({ emailNotifications: z.boolean({ error: "Informe se quer receber os avisos por e-mail." }) });

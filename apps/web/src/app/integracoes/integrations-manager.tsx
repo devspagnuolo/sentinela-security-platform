@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Copy, Plus, Send, Webhook as WebhookIcon } from "lucide-react";
+import { ArrowLeft, Copy, Mail, Plus, Send, Webhook as WebhookIcon } from "lucide-react";
 import type { ApiToken } from "@/lib/auth/tokens";
 import { ROLE_LABELS } from "@/lib/auth/rbac";
 import type { Webhook, WebhookDelivery } from "@/db/webhooks";
@@ -17,7 +17,7 @@ async function send(url: string, method = "POST", body?: unknown) {
   return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
 }
 
-export default function IntegrationsManager({ canManageTokens }: { canManageTokens: boolean }) {
+export default function IntegrationsManager({ canManageTokens, mail }: { canManageTokens: boolean; mail: { from: string; server: string } | null }) {
   const router = useRouter();
   const [hooks, setHooks] = useState<Webhook[]>([]), [tokens, setTokens] = useState<ApiToken[]>([]);
   const [notice, setNotice] = useState(""), [secret, setSecret] = useState<{ name: string; value: string } | null>(null);
@@ -68,6 +68,10 @@ export default function IntegrationsManager({ canManageTokens }: { canManageToke
     const r = await send(`/api/tokens/${t.id}`, "DELETE");
     setNotice(r.ok ? "Token revogado." : r.data.error ?? "Falha na operação."); await refresh();
   }); };
+  const testEmail = () => run(async () => {
+    const r = await send("/api/integrations/email-test");
+    setNotice(r.ok ? `E-mail de teste enviado para ${r.data.to}.` : r.data.error ?? "Falha no envio.");
+  });
   const toggleEvent = (e: WebhookEvent) => setForm(f => ({ ...f, events: f.events.includes(e) ? f.events.filter(x => x !== e) : [...f.events, e] }));
 
   return <main className="content integrations-page">
@@ -83,6 +87,14 @@ export default function IntegrationsManager({ canManageTokens }: { canManageToke
         <button className="button button-primary" onClick={() => setSecret(null)}>Já configurei</button>
       </div>
     </div>}
+
+    <section className="account-card">
+      <h2><Mail size={18}/>E-mail</h2>
+      {mail ? <>
+        <p>Os avisos do sino também são enviados por e-mail a quem não desativou em Minha conta. Remetente <code>{mail.from}</code> via <code>{mail.server}</code>.</p>
+        <button className="button button-secondary" disabled={busy} onClick={() => void testEmail()}><Send size={15}/>Enviar e-mail de teste para mim</button>
+      </> : <p>Não configurado. Para enviar os avisos também por e-mail, defina <code>SENTINELA_SMTP_URL</code> e <code>SENTINELA_MAIL_FROM</code> no servidor (veja docs/api.md).</p>}
+    </section>
 
     <section className="account-card">
       <h2><WebhookIcon size={18}/>Novo webhook</h2>
