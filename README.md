@@ -15,7 +15,8 @@ O relatório individual por ativo está disponível em JSON e HTML imprimível, 
 - O scanner fica desabilitado por padrão; `SENTINELA_ENABLE_SCANNER=1` habilita a execução somente para os hostnames da lista.
 - Apenas URLs HTTPS com hostname DNS público são aceitas. IPs literais, redes privadas, loopback e portas alternativas são bloqueados.
 - Não há exploração, autenticação forçada, varredura de portas, crawling, escrita no alvo ou persistência de corpos de resposta.
-- O protótipo não tem autenticação de operador, persistência confiável nem proteção completa contra mudança de DNS entre validação e conexão. Não o exponha na internet nem use dados reais de clientes até concluir esses controles.
+- A conexão usa o endereço IP validado na resolução DNS (sem nova consulta), o que impede DNS rebinding; apenas status e cabeçalhos são lidos, com limite de 16 KB, e o corpo nunca é baixado.
+- O protótipo ainda não tem autenticação de operador nem persistência confiável. Não o exponha na internet nem use dados reais de clientes até concluir esses controles.
 
 ## Fluxo previsto para a consultoria
 
@@ -31,16 +32,27 @@ O relatório individual por ativo está disponível em JSON e HTML imprimível, 
 Requisitos: Node.js 20+ e npm. Após obter o código do GitHub:
 
 ```powershell
-npm install
+npm ci
 npm run dev
+```
+
+Verificações de qualidade (as mesmas executadas no CI):
+
+```powershell
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
 Abra http://localhost:3000. Os ativos novos só ficam aptos à avaliação quando o hostname consta na lista do operador e a autorização é confirmada no cadastro. Os dados e indicadores iniciais são apenas demonstrativos.
 
 ## Próximos marcos
 
+O roadmap enterprise completo (multi-tenancy, RBAC, SSO, observabilidade e deploy) está em evolução; os marcos abaixo resumem a ordem.
+
 1. Autenticação de operador e armazenamento seguro de clientes, autorizações, avaliações e relatórios.
-2. Validação de escopo com DNS fixado na conexão, limites de resposta e auditoria de execução.
+2. Auditoria de execução e autorizações com janela de validade no banco.
 3. Verificações TLS, inventário passivo de tecnologias e conectores cloud read-only.
 4. Relatórios PDF/XLSX, revisão de achados e histórico de reavaliações.
 5. Deploy privado e controle de acesso para uso individual.

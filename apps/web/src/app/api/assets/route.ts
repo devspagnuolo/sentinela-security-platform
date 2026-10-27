@@ -2,14 +2,20 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { store } from "@/lib/store";
 import { validateTarget } from "@/lib/scanner";
+import { isHostAllowed } from "@/lib/config";
+import { createAssetSchema, firstIssue } from "@/lib/validation";
+import type { Asset } from "@/lib/types";
 export const runtime = "nodejs";
 export async function GET() { return NextResponse.json(store.assets); }
 export async function POST(request: Request) {
+  let body: unknown;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "Corpo da requisição deve ser JSON válido." }, { status: 400 }); }
+  const parsed = createAssetSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: firstIssue(parsed.error) }, { status: 400 });
+  const input = parsed.data;
   try {
-    const body = await request.json();
-    if (body?.authorized !== true || typeof body.authorizationRef !== "string" || body.authorizationRef.trim().length < 4) return NextResponse.json({ error: "Confirme a autorização formal e informe a referência do documento." }, { status: 400 });
-    const url = await validateTarget(String(body.url ?? ""));
-    const asset = { id: randomUUID(), name: String(body.name ?? url.hostname).slice(0,100), url: url.origin, kind: body.kind === "API" ? "API" as const : "Web application" as const, owner: String(body.owner ?? "Equipe").slice(0,100), approved: process.env.SENTINELA_ENABLE_SCANNER === "1" && (process.env.SENTINELA_ALLOWED_HOSTS ?? "").split(",").some(host => host.trim().toLowerCase() === url.hostname.toLowerCase()), authorizationRef: body.authorizationRef.trim().slice(0,120), createdAt: new Date().toISOString() };
+    const { url } = await validateTarget(input.url);
+    const asset: Asset = { id: randomUUID(), name: input.name || url.hostname, url: url.origin, kind: input.kind, owner: input.owner || "Equipe", approved: isHostAllowed(url.hostname), authorizationRef: input.authorizationRef, createdAt: new Date().toISOString() };
     store.assets.unshift(asset);
     return NextResponse.json(asset, { status: 201 });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Não foi possível cadastrar o ativo." }, { status: 400 }); }

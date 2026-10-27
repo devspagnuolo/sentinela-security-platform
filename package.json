@@ -2,10 +2,20 @@
   "name": "sentinela-security-assessment",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev": "npm run dev --workspace @sentinela/web",
     "build": "npm run build --workspace @sentinela/web",
-    "typecheck": "npm run typecheck --workspace @sentinela/web"
+    "typecheck": "npm run typecheck --workspace @sentinela/web",
+    "lint": "npm run lint --workspace @sentinela/web",
+    "test": "npm run test --workspace @sentinela/web"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "postcss": "^8.5.23"
   }
 }
