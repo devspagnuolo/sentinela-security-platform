@@ -2,7 +2,7 @@
 
 ## MVP implementado
 
-Next.js entrega uma UI de painel e rotas API locais para inventário, execução de avaliação e exportação JSON/CSV. O scanner realiza uma única requisição HTTPS GET ao host cadastrado, sem seguir redirecionamentos. Avalia status da resposta, headers defensivos, política CORS observada, atributos de cookies, validade TLS reportada pelo runtime e indícios de listagem de diretório na página raiz. A evidência é limitada a valores de headers e metadados; o corpo não é persistido.
+Next.js entrega uma UI de painel e rotas API locais para inventário, execução de avaliação e exportação JSON/CSV. O scanner realiza uma única requisição HTTPS GET ao host cadastrado, sem seguir redirecionamentos. Avalia status da resposta, headers defensivos, política CORS observada, atributos de cookies, headers de resposta e alguns atributos de cookies. A evidência é limitada a valores de headers e metadados; o corpo não é persistido.
 
 ## Arquitetura SaaS proposta
 

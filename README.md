@@ -1,13 +1,13 @@
 # Sentinela
 
-Plataforma SaaS de assessment de segurança autorizado. Este repositório contém o MVP: cadastro de ativos em escopo, execução manual de verificações HTTP/TLS não intrusivas, achados e exportação JSON/CSV. Nenhuma exploração ou tentativa de autenticação é implementada.
+Plataforma SaaS de assessment de segurança autorizado. Este repositório contém o MVP: cadastro de ativos em escopo, execução manual de verificações de metadados HTTP não intrusivas, achados e exportação JSON/CSV. Nenhuma exploração ou tentativa de autenticação é implementada.
 
 ## Segurança e autorização
 
 - Cadastre somente ativos para os quais sua organização tenha autorização formal.
 - O MVP aceita apenas URLs HTTPS públicas, bloqueia loopback, redes privadas/link-local e IPs literais.
 - Cada alvo precisa estar explicitamente cadastrado e aprovado antes da análise.
-- As verificações são limitadas a uma requisição GET para a URL raiz, sem seguir redirects, com timeout e limite de resposta.
+- O scanner exige `SENTINELA_ENABLE_SCANNER=1` e uma lista explícita de hostnames em `SENTINELA_ALLOWED_HOSTS`. Faz uma requisição GET para a URL raiz, sem seguir redirects, com timeout de 5 segundos e sem persistir o corpo.
 - Não há varredura de portas, força bruta, exploração, crawling, execução remota ou alteração de dados.
 - O modo de desenvolvimento usa dados locais demonstrativos; não é adequado para produção nem multiempresa.
 
@@ -20,12 +20,12 @@ npm install
 npm run dev
 ```
 
-Abra http://localhost:3000. Use o botão **Novo ativo** para cadastrar um endereço autorizado e **Executar avaliação** para iniciar a checagem segura.
+Abra http://localhost:3000. Os dados do painel são demonstrativos. Ativos novos permanecem pendentes; o MVP ainda não oferece um fluxo de aprovação. Para habilitar avaliações em um ambiente de desenvolvimento controlado, configure `SENTINELA_ENABLE_SCANNER=1` e `SENTINELA_ALLOWED_HOSTS=host.exemplo.com` no processo do servidor, após registrar a autorização formal.
 
 ## Estrutura
 
 - `apps/web`: interface Next.js, painel e API de desenvolvimento.
-- `apps/web/src/lib/scanner.ts`: checagens HTTP/TLS seguras e validação de escopo.
+- `apps/web/src/lib/scanner.ts`: checagens de metadados HTTP e validação inicial de escopo.
 - `docs/architecture.md`: arquitetura-alvo e próximos marcos.
 - `docker-compose.yml`: PostgreSQL e Redis para desenvolvimento local.
 

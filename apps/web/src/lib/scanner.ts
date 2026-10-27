@@ -24,7 +24,10 @@ export async function validateTarget(raw: string) {
 const makeFinding = (asset: Asset, title: string, severity: Finding["severity"], category: string, description: string, evidence: string, recommendation: string): Finding => ({ id: randomUUID(), assetId: asset.id, title, severity, category, description, evidence, recommendation, references: ["OWASP Secure Headers Project", "CWE-693"], discoveredAt: new Date().toISOString() });
 
 export async function assess(asset: Asset): Promise<Finding[]> {
+  if (process.env.SENTINELA_ENABLE_SCANNER !== "1") throw new Error("Scanner desabilitado. Configure o ambiente antes de executar avaliações.");
   const url = await validateTarget(asset.url);
+  const allowedHosts = (process.env.SENTINELA_ALLOWED_HOSTS ?? "").split(",").map(host => host.trim().toLowerCase()).filter(Boolean);
+  if (!allowedHosts.includes(url.hostname.toLowerCase())) throw new Error("O hostname não consta na lista de alvos autorizados pelo operador.");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
