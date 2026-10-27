@@ -48,3 +48,14 @@ export const mfaVerifySchema = z.object({ challenge: z.string().min(10).max(128)
 export const mfaCodeSchema = z.object({ code: z.string().trim().min(6).max(20) });
 export const passwordConfirmSchema = z.object({ password: z.string().max(256) });
 export const organizationSchema = z.object({ requireMfa: z.boolean().optional(), name: z.string().trim().min(2).max(100).optional() }).refine(v => Object.values(v).some(x => x !== undefined), "Nada para alterar.");
+
+const domain = z.string().trim().toLowerCase().regex(/^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/, "Domínio inválido.");
+export const ssoConfigSchema = z.object({
+  issuer: z.string().trim().max(512).pipe(z.url({ protocol: /^https?$/, error: "Informe a URL do emissor (issuer)." })),
+  clientId: z.string().trim().min(1, "Informe o client ID.").max(255),
+  clientSecret: z.string().trim().min(1).max(1024).optional(),
+  allowedDomains: z.array(domain).min(1, "Informe ao menos um domínio de e-mail.").max(20),
+  enabled: z.boolean(),
+  enforced: z.boolean().default(false),
+  jitRole: z.enum(["analyst", "viewer"]).nullable().default(null)
+}).refine(v => !v.enforced || v.enabled, "Ative o SSO antes de torná-lo obrigatório.");

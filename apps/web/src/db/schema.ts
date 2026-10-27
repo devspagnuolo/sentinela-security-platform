@@ -58,6 +58,8 @@ export const sessions = pgTable("sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  // password | mfa | sso: login via SSO cumpre a política de MFA da organização (o IdP aplica o próprio MFA).
+  authMethod: text("auth_method").notNull().default("password"),
   ip: text("ip"),
   userAgent: text("user_agent")
 }, t => [index("sessions_user_idx").on(t.userId), index("sessions_expires_idx").on(t.expiresAt)]);
@@ -156,3 +158,38 @@ export const auditLog = pgTable("audit_log", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 }, t => [index("audit_log_org_created_idx").on(t.organizationId, t.createdAt)]);
+
+// Provedor OIDC da organização (Google Workspace, Entra ID, Okta…). client_secret cifrado (src/lib/crypto.ts).
+export const ssoConnections = pgTable("sso_connections", {
+  organizationId: uuid("organization_id").primaryKey().references(() => organizations.id, { onDelete: "cascade" }),
+  issuer: text("issuer").notNull(),
+  clientId: text("client_id").notNull(),
+  clientSecret: text("client_secret").notNull(),
+  allowedDomains: jsonb("allowed_domains").$type<string[]>().notNull(),
+  enabled: boolean("enabled").notNull().default(false),
+  // Só Owners continuam entrando com senha (acesso de emergência).
+  enforced: boolean("enforced").notNull().default(false),
+  // Papel dado a quem entra pela primeira vez via SSO; null = só usuários já cadastrados.
+  jitRole: roleEnum("jit_role"),
+  ...timestamps
+});
+
+// Vínculo estável usuário ↔ (issuer, sub), para não depender só do e-mail.
+export const ssoIdentities = pgTable("sso_identities", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  organizationId: orgRef(),
+  issuer: text("issuer").notNull(),
+  subject: text("subject").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, t => [uniqueIndex("sso_identities_issuer_subject_idx").on(t.issuer, t.subject)]);
+
+// Login SSO em andamento; id = SHA-256 do state (que também fica num cookie do navegador).
+export const ssoRequests = pgTable("sso_requests", {
+  id: text("id").primaryKey(),
+  organizationId: orgRef(),
+  nonce: text("nonce").notNull(),
+  codeVerifier: text("code_verifier").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});

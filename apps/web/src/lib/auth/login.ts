@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { tenantRepository } from "@/db/repository";
-import { users } from "@/db/schema";
+import { ssoConnections, users } from "@/db/schema";
 import { findUserByEmail, primaryMembership } from "@/db/users";
 import { burnVerification, verifyPassword } from "./password";
 import { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./limits";
@@ -10,6 +10,7 @@ import { createSession } from "./session";
 
 export { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./limits";
 export const INVALID_CREDENTIALS = "E-mail ou senha inválidos.";
+export const SSO_REQUIRED = "Sua organização exige o login via SSO. Use o botão \"Entrar com SSO\".";
 
 type Meta = { ip?: string | null; userAgent?: string | null };
 export type LoginResult = { ok: true; token: string; expiresAt: Date } | { ok: "mfa"; challenge: string } | { ok: false; error: string };
@@ -38,6 +39,15 @@ export async function login(db: Database, email: string, password: string, meta:
       await audit?.audit("auth.login_rejected", "user", user.id, { ip: meta.ip ?? null, reason: locked ? "locked" : user.disabled ? "disabled" : "no_membership" });
     }
     return { ok: false, error: INVALID_CREDENTIALS };
+  }
+
+  // SSO obrigatório: só Owners mantêm o login por senha (acesso de emergência se o provedor cair).
+  if (membership.role !== "owner") {
+    const [sso] = await db.select({ enforced: ssoConnections.enforced, enabled: ssoConnections.enabled }).from(ssoConnections).where(eq(ssoConnections.organizationId, membership.organizationId));
+    if (sso?.enabled && sso.enforced) {
+      await audit.audit("auth.login_rejected", "user", user.id, { ip: meta.ip ?? null, reason: "sso_enforced" });
+      return { ok: false, error: SSO_REQUIRED };
+    }
   }
 
   if (user.totpEnabledAt) {

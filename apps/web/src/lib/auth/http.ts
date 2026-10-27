@@ -15,6 +15,15 @@ export function clearedSessionCookie() {
   return { name: sessionCookieName(), value: "", httpOnly: true, secure: secureCookies(), sameSite: "lax" as const, path: "/", maxAge: 0 };
 }
 
+/** Cookie com o state do login SSO em andamento; amarra o retorno do provedor a este navegador. */
+export const ssoStateCookieName = () => secureCookies() ? "__Host-sentinela_sso" : "sentinela_sso";
+export function ssoStateCookie(state: string, maxAgeSeconds: number) {
+  return { name: ssoStateCookieName(), value: state, httpOnly: true, secure: secureCookies(), sameSite: "lax" as const, path: "/", maxAge: maxAgeSeconds };
+}
+export function clearedSsoStateCookie() {
+  return { name: ssoStateCookieName(), value: "", httpOnly: true, secure: secureCookies(), sameSite: "lax" as const, path: "/", maxAge: 0 };
+}
+
 export function readCookie(header: string | null, name: string): string | undefined {
   for (const part of header?.split(";") ?? []) {
     const index = part.indexOf("=");
