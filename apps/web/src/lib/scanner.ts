@@ -11,6 +11,7 @@ export type Resolver = (hostname: string) => Promise<ResolvedAddress[]>;
 export type ObservedResponse = { status: number; header(name: string): string | undefined; cookies: string[] };
 export type Fetcher = (url: URL, pinned: ResolvedAddress) => Promise<ObservedResponse>;
 
+export const SCANNER_METHOD_ID = "SENTINELA-HTTP-001";
 const USER_AGENT = "Sentinela-Authorized-Assessment/0.2";
 const TIMEOUT_MS = 5000;
 

@@ -7,11 +7,17 @@
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/db.mts migrate",
+    "db:seed": "tsx scripts/db.mts seed"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.12",
+    "drizzle-orm": "^0.45.4",
     "lucide-react": "^0.468.0",
     "next": "^15.2.0",
+    "pg": "^8.23.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^4.6.7"
@@ -19,10 +25,13 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
     "@types/node": "^22.10.0",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.28",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.0",
     "vitest": "^3.2.7"
   }

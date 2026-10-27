@@ -1,3 +1,4 @@
 import { NextResponse } from "next/server";
-import { store } from "@/lib/store";
-export async function GET() { return NextResponse.json(store.findings); }
+import { requestRepository } from "@/lib/tenant";
+export const runtime = "nodejs";
+export async function GET() { return NextResponse.json(await (await requestRepository()).listFindings()); }
