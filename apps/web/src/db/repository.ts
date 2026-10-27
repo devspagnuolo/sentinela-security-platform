@@ -1,12 +1,13 @@
-import { and, desc, eq, inArray, type Column } from "drizzle-orm";
+import { and, desc, eq, inArray, like, lt, type Column, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import type { Asset, Assessment, Finding } from "@/lib/types";
 import type { Database } from "./client";
-import { assessments, assets, auditLog, findings } from "./schema";
+import { assessments, assets, auditLog, findings, users } from "./schema";
 
 type NewAsset = Omit<Asset, "id" | "createdAt">;
 type NewFinding = Omit<Finding, "id" | "assetId" | "discoveredAt">;
-export type AuditEntry = { id: string; action: string; targetType: string; targetId: string | null; actorUserId: string | null; metadata: Record<string, unknown>; createdAt: string };
+export type AuditEntry = { id: string; seq: number; action: string; targetType: string; targetId: string | null; actorUserId: string | null; actorName: string | null; actorEmail: string | null; metadata: Record<string, unknown>; createdAt: string };
+export type AuditQuery = { before?: number; actionPrefix?: string };
 
 const isUuid = (value: string) => z.uuid().safeParse(value).success;
 
@@ -84,9 +85,15 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
       await db.insert(auditLog).values({ organizationId, actorUserId, action, targetType, targetId, metadata });
     },
 
-    async listAudit(limit = 100): Promise<AuditEntry[]> {
-      const rows = await db.select().from(auditLog).where(own(auditLog)).orderBy(desc(auditLog.seq)).limit(Math.min(Math.max(limit, 1), 500));
-      return rows.map(r => ({ id: r.id, action: r.action, targetType: r.targetType, targetId: r.targetId, actorUserId: r.actorUserId, metadata: r.metadata, createdAt: r.createdAt.toISOString() }));
+    /** Mais recentes primeiro; `before` (seq) pagina para trás e `actionPrefix` filtra por categoria (ex.: "auth."). */
+    async listAudit(limit = 100, query: AuditQuery = {}): Promise<AuditEntry[]> {
+      const conditions: SQL[] = [own(auditLog)];
+      if (query.before !== undefined) conditions.push(lt(auditLog.seq, query.before));
+      if (query.actionPrefix) conditions.push(like(auditLog.action, `${query.actionPrefix.replace(/[%_\\]/g, "")}%`));
+      const rows = await db.select({ entry: auditLog, actorName: users.name, actorEmail: users.email }).from(auditLog)
+        .leftJoin(users, eq(users.id, auditLog.actorUserId))
+        .where(and(...conditions)).orderBy(desc(auditLog.seq)).limit(Math.min(Math.max(limit, 1), 500));
+      return rows.map(({ entry: r, actorName, actorEmail }) => ({ id: r.id, seq: r.seq, action: r.action, targetType: r.targetType, targetId: r.targetId, actorUserId: r.actorUserId, actorName, actorEmail, metadata: r.metadata, createdAt: r.createdAt.toISOString() }));
     }
   };
 }

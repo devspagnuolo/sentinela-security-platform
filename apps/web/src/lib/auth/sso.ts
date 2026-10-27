@@ -6,6 +6,7 @@ import { tenantRepository } from "@/db/repository";
 import { memberships, ssoConnections, ssoIdentities, ssoRequests, users } from "@/db/schema";
 import { findUserByEmail } from "@/db/users";
 import { decrypt, encrypt } from "@/lib/crypto";
+import { logger } from "@/lib/logger";
 import type { Role } from "./rbac";
 import { createSession } from "./session";
 
@@ -106,6 +107,7 @@ export async function completeSso(db: Database, input: { state: string | null; c
     });
     claims = tokens.claims() as unknown as Claims;
   } catch (error) {
+    logger.warn("auth.sso_failed", { organizationId: conn.organizationId, error });
     await audit.audit("auth.sso_failed", "organization", conn.organizationId, { ip: input.meta?.ip ?? null, reason: error instanceof Error ? error.message.slice(0, 200) : "unknown" });
     return { ok: false, error: "sso_failed" };
   }
