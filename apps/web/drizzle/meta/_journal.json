@@ -29,6 +29,13 @@
       "when": 1793126090759,
       "tag": "0003_sso",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793127989400,
+      "tag": "0004_scopes_findings",
+      "breakpoints": true
     }
   ]
 }

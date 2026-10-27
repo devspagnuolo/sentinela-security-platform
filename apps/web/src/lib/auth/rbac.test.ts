@@ -10,7 +10,11 @@ const matrix: Record<Permission, Role[]> = {
   "audit:read": ["owner", "admin"],
   "user:read": ["owner", "admin"],
   "user:manage": ["owner", "admin"],
-  "org:manage": ["owner"]
+  "org:manage": ["owner"],
+  "scope:write": ["owner", "admin", "analyst"],
+  "scope:approve": ["owner", "admin"],
+  "finding:triage": ["owner", "admin", "analyst"],
+  "finding:accept": ["owner", "admin"]
 };
 
 describe("RBAC", () => {

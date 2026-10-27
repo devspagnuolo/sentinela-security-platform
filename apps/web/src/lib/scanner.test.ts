@@ -3,7 +3,7 @@ import { analyzeResponse, assess, validateTarget, type ObservedResponse, type Re
 import type { Asset } from "./types";
 
 const publicResolver: Resolver = async () => [{ address: "93.184.216.34", family: 4 }];
-const asset: Asset = { id: "a1", name: "Teste", url: "https://app.example.com", kind: "Web application", owner: "Equipe", approved: true, authorizationRef: "AUT-1", createdAt: "2026-01-01T00:00:00.000Z" };
+const asset: Pick<Asset, "url"> = { url: "https://app.example.com" };
 
 function response(headers: Record<string, string>, cookies: string[] = [], status = 200): ObservedResponse {
   const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));

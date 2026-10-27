@@ -49,3 +49,28 @@
 .table-scroll{width:100%;overflow-x:auto}
 .nowrap{white-space:nowrap}
 .audit-details{font-size:12px;color:#3d5148;word-break:break-word;max-width:420px}
+.status-dot.status-off{background:#d9a441}
+.modal-hint{font-size:10px;color:#7a5a1e;background:#fff9ec;border:1px solid #f1dfb8;border-radius:6px;padding:8px 10px;margin:4px 0 0}
+.modal-hint a{color:#176b53}
+a.all-findings{text-decoration:none}
+.scopes-page,.findings-page{max-width:1100px}
+.scope-form{width:100%}
+.scope-form textarea,.finding-detail textarea{padding:9px 11px;border:1px solid #cfdcd4;border-radius:8px;font:inherit;width:100%;resize:vertical}
+.scope-form label,.finding-detail label{width:100%}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;width:100%}
+.scope-list{display:flex;flex-direction:column;gap:12px;width:100%}
+.scope-card{width:100%}
+.scope-head{display:flex;justify-content:space-between;gap:12px;width:100%;align-items:flex-start}
+.scope-head h2{font-size:16px}
+.state-badge,.status-badge{border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;white-space:nowrap;background:#eef2ef;color:#4c5c53}
+.state-active,.status-fixed{background:#e7f6ee;color:#1d7a52}
+.state-pending,.state-scheduled,.status-accepted{background:#fff6e5;color:#94661c}
+.state-expired,.state-revoked,.status-open{background:#fdecec;color:#9b2c2c}
+.status-false_positive{background:#eef1f8;color:#4f5f8a}
+.findings-page select{padding:9px 11px;border:1px solid #cfdcd4;border-radius:8px;font:inherit}
+.findings-table tbody tr{cursor:pointer}
+.findings-table tbody tr:hover,.findings-table tbody tr.selected{background:#f4faf6}
+.finding-detail{width:100%}
+.finding-detail h3{margin:6px 0 0;font-size:14px}
+.history{margin:0;padding-left:18px;font-size:13px;color:#3d5148;display:flex;flex-direction:column;gap:4px}
+.findings-table .severity-tag{font-size:12px;padding:3px 8px}

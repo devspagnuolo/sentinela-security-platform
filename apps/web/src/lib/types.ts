@@ -1,12 +1,19 @@
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
+export type FindingStatus = "open" | "accepted" | "fixed" | "false_positive";
+export type ScopeState = "pending" | "active" | "scheduled" | "expired" | "revoked";
 export type Asset = {
   id: string;
   name: string;
   url: string;
   kind: "Web application" | "API";
   owner: string;
-  approved: boolean;
   authorizationRef: string;
+  authorizationId: string | null;
+  /** Situação da autorização vinculada agora; scopeOk diz se o hostname está liberado para avaliação. */
+  scopeState: ScopeState | null;
+  scopeOk: boolean;
+  scopeMessage: string | null;
+  scopeValidUntil: string | null;
   createdAt: string;
 };
 export type Finding = {
@@ -19,6 +26,32 @@ export type Finding = {
   evidence: string;
   recommendation: string;
   references: string[];
+  status: FindingStatus;
+  statusReason: string | null;
+  statusChangedAt: string | null;
+  acceptedUntil: string | null;
   discoveredAt: string;
+  lastSeenAt: string;
+};
+export type FindingEvent = { id: string; fromStatus: FindingStatus | null; toStatus: FindingStatus; reason: string | null; actorName: string | null; createdAt: string };
+export type Authorization = {
+  id: string;
+  reference: string;
+  clientName: string | null;
+  hostnames: string[];
+  excludedHostnames: string[];
+  validFrom: string | null;
+  validUntil: string | null;
+  emergencyContact: string | null;
+  notes: string | null;
+  status: "pending" | "approved" | "revoked";
+  state: ScopeState;
+  createdBy: { id: string; name: string } | null;
+  approvedBy: { id: string; name: string } | null;
+  approvedAt: string | null;
+  revokedAt: string | null;
+  revokeReason: string | null;
+  assetCount: number;
+  createdAt: string;
 };
 export type Assessment = { id: string; assetId: string; status: "completed"; startedAt: string; findingIds: string[] };
