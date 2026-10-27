@@ -1,10 +1,12 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { request } from "node:https";
 import { isIP, type LookupFunction } from "node:net";
-import { randomUUID } from "node:crypto";
 import { isHostAllowed, scannerConfig, type ScannerConfig } from "./config";
 import { isPublicAddress } from "./network";
 import type { Asset, Finding } from "./types";
+
+/** Achado observado numa execução; a consolidação entre execuções fica no repositório. */
+export type Observation = Pick<Finding, "title" | "severity" | "category" | "description" | "evidence" | "recommendation" | "references">;
 
 export type ResolvedAddress = { address: string; family: number };
 export type Resolver = (hostname: string) => Promise<ResolvedAddress[]>;
@@ -59,7 +61,7 @@ export const pinnedFetch: Fetcher = (url, pinned) => new Promise((resolve, rejec
   req.end();
 });
 
-const makeFinding = (asset: Asset, title: string, severity: Finding["severity"], category: string, description: string, evidence: string, recommendation: string): Finding => ({ id: randomUUID(), assetId: asset.id, title, severity, category, description, evidence, recommendation, references: ["OWASP Secure Headers Project", "CWE-693"], discoveredAt: new Date().toISOString() });
+const makeFinding = (_asset: Pick<Asset, "url">, title: string, severity: Finding["severity"], category: string, description: string, evidence: string, recommendation: string): Observation => ({ title, severity, category, description, evidence, recommendation, references: ["OWASP Secure Headers Project", "CWE-693"] });
 
 const headerChecks: [string, string, Finding["severity"], string][] = [
   ["content-security-policy", "Política de segurança de conteúdo ausente", "medium", "Defina uma CSP adequada ao inventário de recursos e monitore violações antes do bloqueio."],
@@ -74,8 +76,8 @@ function cookieAttributes(cookie: string) {
 }
 
 /** Converte os metadados observados em achados preliminares. Função pura. */
-export function analyzeResponse(asset: Asset, response: ObservedResponse): Finding[] {
-  const findings: Finding[] = [];
+export function analyzeResponse(asset: Pick<Asset, "url">, response: ObservedResponse): Observation[] {
+  const findings: Observation[] = [];
   for (const [header, title, severity, recommendation] of headerChecks) {
     if (response.header(header) === undefined) findings.push(makeFinding(asset, title, severity, "HTTP Headers", `A resposta HTTPS não incluiu ${header}.`, `Header ${header} ausente`, recommendation));
   }
@@ -94,7 +96,7 @@ export function analyzeResponse(asset: Asset, response: ObservedResponse): Findi
 
 export type AssessDeps = { config?: ScannerConfig; resolve?: Resolver; fetcher?: Fetcher };
 
-export async function assess(asset: Asset, deps: AssessDeps = {}): Promise<Finding[]> {
+export async function assess(asset: Pick<Asset, "url">, deps: AssessDeps = {}): Promise<Observation[]> {
   const config = deps.config ?? scannerConfig();
   if (!config.enabled) throw new Error("Scanner desabilitado. Configure o ambiente antes de executar avaliações.");
   const { url, addresses } = await validateTarget(asset.url, deps.resolve);

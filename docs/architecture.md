@@ -33,3 +33,9 @@ A ausência de cabeçalho ou um banner é um indicador de configuração, não p
 ## Limites atuais
 
 Sem aprovação com validade aplicada pelo scanner, varredura TLS, descoberta ampla, testes autenticados, cloud, PDF gerado no servidor ou IA. O protótipo não deve receber dados reais de clientes nem ser exposto publicamente até que os controles essenciais estejam implementados.
+
+## Escopos e ciclo de vida dos achados
+
+`authorizations` guarda a autorização de escopo, com status `pending`, `approved` ou `revoked`, hostnames e exclusões (`text[]`) e a janela `valid_from`/`valid_until`. A decisão é tomada por funções puras em `src/lib/scope.ts` (`evaluateScope`): aprovada, dentro da janela, hostname coberto por um padrão exato ou `*.dominio` e fora das exclusões. Ela vale no cadastro do ativo (`assets.authorization_id`) e de novo imediatamente antes de cada avaliação. Uma tentativa bloqueada gera `assessment.blocked` na auditoria, sem nenhuma requisição ao alvo. A aprovação exige `scope:approve` e outra pessoa; o Owner pode aprovar a própria autorização, e isso fica auditado com `selfApproved`.
+
+`findings` tem um registro por (organização, ativo, `fingerprint`), em que a impressão digital é `categoria|título` normalizados. `assessment_findings` liga cada execução aos achados que ela observou, com a evidência daquela execução. `recordAssessment` consolida tudo numa transação: cria os novos, atualiza os conhecidos, reabre os `fixed` que voltaram e marca como `fixed` os `open`/`accepted` que não apareceram. `false_positive` não muda automaticamente. Aceites de risco têm `accepted_until`; ao listar ou avaliar, os vencidos voltam a `open`. Toda transição gera uma linha em `finding_events` (somente inserção) e, quando é manual, também em `audit_log`. A migração `0004` consolida os achados duplicados de versões anteriores.

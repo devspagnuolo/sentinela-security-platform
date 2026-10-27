@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 // Toda tabela de negócio carrega organization_id: o isolamento entre organizações
 // é garantido na camada de repositório (src/db/repository.ts), que sempre filtra por ele.
@@ -9,6 +9,7 @@ export const assetKindEnum = pgEnum("asset_kind", ["Web application", "API"]);
 export const severityEnum = pgEnum("severity", ["critical", "high", "medium", "low", "info"]);
 export const assessmentStatusEnum = pgEnum("assessment_status", ["queued", "running", "completed", "failed"]);
 export const findingStatusEnum = pgEnum("finding_status", ["open", "accepted", "fixed", "false_positive"]);
+export const authorizationStatusEnum = pgEnum("authorization_status", ["pending", "approved", "revoked"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -101,6 +102,16 @@ export const authorizations = pgTable("authorizations", {
   validUntil: timestamp("valid_until", { withTimezone: true }),
   emergencyContact: text("emergency_contact"),
   exclusions: text("exclusions"),
+  // Hostnames fora do escopo mesmo que casem com um curinga de `hostnames`.
+  excludedHostnames: text("excluded_hostnames").array().notNull().default(sql`'{}'::text[]`),
+  // pending → approved (por outra pessoa com scope:approve) → revoked. Só "approved" dentro da validade libera avaliações.
+  status: authorizationStatusEnum("status").notNull().default("pending"),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  revokedBy: uuid("revoked_by").references(() => users.id, { onDelete: "set null" }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  revokeReason: text("revoke_reason"),
   ...timestamps
 }, t => [index("authorizations_org_idx").on(t.organizationId)]);
 
@@ -113,8 +124,8 @@ export const assets = pgTable("assets", {
   url: text("url").notNull(),
   kind: assetKindEnum("kind").notNull(),
   owner: text("owner").notNull(),
+  // Cópia da referência da autorização no momento do cadastro (aparece nos relatórios).
   authorizationRef: text("authorization_ref").notNull(),
-  approved: boolean("approved").notNull().default(false),
   ...timestamps
 }, t => [index("assets_org_created_idx").on(t.organizationId, t.createdAt)]);
 
@@ -141,9 +152,42 @@ export const findings = pgTable("findings", {
   evidence: text("evidence").notNull(),
   recommendation: text("recommendation").notNull(),
   references: jsonb("references").$type<string[]>().notNull().default([]),
+  // Identifica o mesmo problema entre avaliações do ativo (categoria + título): um achado por problema, não por execução.
+  fingerprint: text("fingerprint").notNull(),
   status: findingStatusEnum("status").notNull().default("open"),
-  discoveredAt: timestamp("discovered_at", { withTimezone: true }).notNull().defaultNow()
-}, t => [index("findings_org_discovered_idx").on(t.organizationId, t.discoveredAt), index("findings_assessment_idx").on(t.assessmentId)]);
+  statusReason: text("status_reason"),
+  statusChangedAt: timestamp("status_changed_at", { withTimezone: true }),
+  statusChangedBy: uuid("status_changed_by").references(() => users.id, { onDelete: "set null" }),
+  // Aceite de risco com prazo: vencido, o achado volta a "open".
+  acceptedUntil: timestamp("accepted_until", { withTimezone: true }),
+  discoveredAt: timestamp("discovered_at", { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  lastAssessmentId: uuid("last_assessment_id").references(() => assessments.id, { onDelete: "set null" })
+}, t => [
+  index("findings_org_discovered_idx").on(t.organizationId, t.discoveredAt),
+  index("findings_assessment_idx").on(t.assessmentId),
+  uniqueIndex("findings_asset_fingerprint_idx").on(t.organizationId, t.assetId, t.fingerprint)
+]);
+
+// Quais achados cada execução observou (a execução é um retrato; o achado é o problema ao longo do tempo).
+export const assessmentFindings = pgTable("assessment_findings", {
+  organizationId: orgRef(),
+  assessmentId: uuid("assessment_id").notNull().references(() => assessments.id, { onDelete: "cascade" }),
+  findingId: uuid("finding_id").notNull().references(() => findings.id, { onDelete: "cascade" }),
+  evidence: text("evidence").notNull()
+}, t => [primaryKey({ columns: [t.assessmentId, t.findingId] }), index("assessment_findings_finding_idx").on(t.findingId)]);
+
+// Histórico de triagem de cada achado (somente inserção).
+export const findingEvents = pgTable("finding_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: orgRef(),
+  findingId: uuid("finding_id").notNull().references(() => findings.id, { onDelete: "cascade" }),
+  actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+  fromStatus: findingStatusEnum("from_status"),
+  toStatus: findingStatusEnum("to_status").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, t => [index("finding_events_finding_idx").on(t.findingId, t.createdAt)]);
 
 // Trilha de auditoria somente de inserção; o repositório não expõe update/delete.
 export const auditLog = pgTable("audit_log", {

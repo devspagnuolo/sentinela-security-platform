@@ -5,11 +5,14 @@ export const ROLE_LABELS: Record<Role, string> = { owner: "Owner", admin: "Admin
 
 export type Permission =
   | "asset:read" | "asset:write" | "assessment:run" | "report:read" | "export:download"
-  | "audit:read" | "user:read" | "user:manage" | "org:manage";
+  | "audit:read" | "user:read" | "user:manage" | "org:manage"
+  | "scope:write" | "scope:approve" | "finding:triage" | "finding:accept";
 
 const viewer: Permission[] = ["asset:read", "report:read"];
-const analyst: Permission[] = [...viewer, "asset:write", "assessment:run", "export:download"];
-const admin: Permission[] = [...analyst, "audit:read", "user:read", "user:manage"];
+// Analista cadastra escopos e faz a triagem técnica (falso positivo, corrigido, reabrir).
+const analyst: Permission[] = [...viewer, "asset:write", "assessment:run", "export:download", "scope:write", "finding:triage"];
+// Aprovar escopo e aceitar risco são decisões de gestão.
+const admin: Permission[] = [...analyst, "audit:read", "user:read", "user:manage", "scope:approve", "finding:accept"];
 
 const grants: Record<Role, ReadonlySet<Permission>> = {
   viewer: new Set(viewer),

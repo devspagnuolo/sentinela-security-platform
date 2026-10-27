@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { RepositoryError } from "@/db/repository";
 import { validateTarget } from "@/lib/scanner";
-import { isHostAllowed } from "@/lib/config";
 import { withAuth } from "@/lib/auth/http";
 import { createAssetSchema, parseJson } from "@/lib/validation";
 export const runtime = "nodejs";
@@ -13,6 +13,11 @@ export const POST = withAuth("asset:write", async ({ repo }, request) => {
   const input = parsed.data;
   let url: URL;
   try { ({ url } = await validateTarget(input.url)); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Não foi possível cadastrar o ativo." }, { status: 400 }); }
-  const asset = await repo.createAsset({ name: input.name || url.hostname, url: url.origin, kind: input.kind, owner: input.owner || "Equipe", approved: isHostAllowed(url.hostname), authorizationRef: input.authorizationRef });
-  return NextResponse.json(asset, { status: 201 });
+  try {
+    const asset = await repo.createAsset({ name: input.name || url.hostname, url: url.origin, kind: input.kind, owner: input.owner || "Equipe", authorizationId: input.authorizationId });
+    return NextResponse.json(asset, { status: 201 });
+  } catch (error) {
+    if (error instanceof RepositoryError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
+  }
 });
