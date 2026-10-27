@@ -25,7 +25,7 @@ const DAY_MS = 86_400_000;
 const scopeOf = (auth: AuthorizationRow) => ({ status: auth.status, hostnames: auth.hostnames, excludedHostnames: auth.excludedHostnames, validFrom: auth.validFrom, validUntil: auth.validUntil });
 
 const toAssessment = (r: AssessmentRow, extra: { requesterName?: string | null; assetName?: string; findingIds?: string[] } = {}): Assessment => ({
-  id: r.id, assetId: r.assetId, ...(extra.assetName !== undefined && { assetName: extra.assetName }), status: r.status, trigger: r.trigger,
+  id: r.id, assetId: r.assetId, ...(extra.assetName !== undefined && { assetName: extra.assetName }), status: r.status, trigger: r.trigger, method: r.method,
   requestedBy: r.requestedBy ? { id: r.requestedBy, name: extra.requesterName ?? "—" } : null,
   attempts: r.attempts, error: r.error, summary: r.summary ?? null,
   createdAt: r.createdAt.toISOString(), startedAt: iso(r.startedAt), finishedAt: iso(r.finishedAt), findingIds: extra.findingIds ?? []

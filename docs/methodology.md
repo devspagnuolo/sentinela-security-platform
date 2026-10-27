@@ -1,4 +1,6 @@
-# Método SENTINELA-HTTP-001
+# Método SENTINELA-WEB-002
+
+Versão anterior: SENTINELA-HTTP-001 (somente cabeçalhos HTTP). O relatório informa a versão usada em cada execução.
 
 ## Pré-condições
 
@@ -10,8 +12,10 @@ O avaliador confirma autorização formal do proprietário, hostnames exatos, ja
 2. Conferir o hostname na lista explícita de alvos permitidos pelo operador.
 3. Enviar uma requisição GET à URL raiz conectando ao IP validado no passo 1 (sem nova resolução DNS), com User-Agent identificável, timeout de 5 segundos, sem seguir redirecionamentos e encerrando a conexão após os cabeçalhos.
 4. Observar cabeçalhos de resposta: Content-Security-Policy, Strict-Transport-Security, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Access-Control-Allow-Origin, Set-Cookie, Server e X-Powered-By.
-5. Registrar apenas metadados necessários à evidência. Valores de cookies e corpo da resposta não entram no relatório.
-6. Revisar manualmente se o indicador representa risco real para o contexto do cliente.
+5. Na mesma conexão do passo 3, ler o certificado apresentado: se a cadeia é confiável e cobre o hostname, o emissor, o protocolo negociado e a data de vencimento. Um certificado inválido não interrompe a coleta; ele é registrado como achado. Nenhuma conexão adicional é aberta e não há enumeração de cifras ou versões.
+6. Consultar o resolvedor DNS (nunca o alvo) por registros públicos. O CAA é buscado no hostname e nos domínios acima (RFC 8659). No primeiro domínio acima com MX, verificar SPF e DMARC. As verificações DNS só são feitas se o resolvedor responder registros NS em algum nível; erros e tempo limite omitem a verificação, sem acusar ausência.
+7. Registrar apenas metadados necessários à evidência. Valores de cookies e corpo da resposta não entram no relatório.
+8. Revisar manualmente se o indicador representa risco real para o contexto do cliente.
 
 O método não descobre endpoints, não testa autenticação ou autorização, não executa payloads, não acessa diretórios e não confirma CVEs. A identificação de tecnologias por banners é indicativa: pode estar ausente, desatualizada ou deliberadamente alterada.
 

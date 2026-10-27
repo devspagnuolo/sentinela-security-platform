@@ -66,6 +66,8 @@ export type Assessment = {
   assetName?: string;
   status: AssessmentStatus;
   trigger: "manual" | "scheduled";
+  /** Versão do método do scanner usada (ex.: SENTINELA-WEB-002). */
+  method: string;
   requestedBy: { id: string; name: string } | null;
   attempts: number;
   error: string | null;

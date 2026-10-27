@@ -1,6 +1,8 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { request } from "node:https";
 import { isIP, type LookupFunction } from "node:net";
+import type { TLSSocket } from "node:tls";
+import { analyzeTls, checkDns, systemDns, type DnsLookup, type TlsInfo } from "./checks";
 import { isHostAllowed, scannerConfig, type ScannerConfig } from "./config";
 import { isPublicAddress } from "./network";
 import type { Asset, Finding } from "./types";
@@ -10,11 +12,18 @@ export type Observation = Pick<Finding, "title" | "severity" | "category" | "des
 
 export type ResolvedAddress = { address: string; family: number };
 export type Resolver = (hostname: string) => Promise<ResolvedAddress[]>;
-export type ObservedResponse = { status: number; header(name: string): string | undefined; cookies: string[] };
+export type ObservedResponse = { status: number; header(name: string): string | undefined; cookies: string[]; tls?: TlsInfo };
 export type Fetcher = (url: URL, pinned: ResolvedAddress) => Promise<ObservedResponse>;
 
-export const SCANNER_METHOD_ID = "SENTINELA-HTTP-001";
-const USER_AGENT = "Sentinela-Authorized-Assessment/0.2";
+export type ScannerMethod = { id: string; name: string; request: string; checks: string[]; exclusions: string[] };
+const EXCLUSIONS = ["Exploração", "Teste de autenticação ou autorização", "Varredura de portas", "Crawling", "Análise de corpo ou dados pessoais"];
+/** Descrição de cada versão do método, para o relatório citar exatamente o que foi executado. */
+export const SCANNER_METHODS: Record<string, ScannerMethod> = {
+  "SENTINELA-HTTP-001": { id: "SENTINELA-HTTP-001", name: "Inspeção não intrusiva de metadados HTTP", request: "Uma requisição HTTPS GET à raiz; sem seguir redirecionamentos; timeout de 5 segundos", checks: ["Headers defensivos", "CORS observado", "Atributos de cookies", "Banners Server e X-Powered-By"], exclusions: EXCLUSIONS },
+  "SENTINELA-WEB-002": { id: "SENTINELA-WEB-002", name: "Inspeção não intrusiva de HTTP, TLS e DNS", request: "Uma requisição HTTPS GET à raiz (o certificado é lido nessa mesma conexão); sem seguir redirecionamentos; timeout de 5 segundos; consultas DNS públicas ao resolvedor (CAA, MX, SPF, DMARC), sem contato adicional com o alvo", checks: ["Headers defensivos", "CORS observado", "Atributos de cookies", "Banners Server e X-Powered-By", "Confiança e validade do certificado TLS", "CAA, SPF e DMARC"], exclusions: [...EXCLUSIONS, "Enumeração de cifras ou versões de TLS"] }
+};
+export const SCANNER_METHOD_ID = "SENTINELA-WEB-002";
+const USER_AGENT = "Sentinela-Authorized-Assessment/0.3";
 const TIMEOUT_MS = 5000;
 
 const systemResolver: Resolver = hostname => dnsLookup(hostname, { all: true, verbatim: true });
@@ -43,17 +52,29 @@ export const pinnedFetch: Fetcher = (url, pinned) => new Promise((resolve, rejec
   };
   const req = request({
     hostname: url.hostname, port: 443, path: "/", method: "GET", lookup, servername: url.hostname,
+    // Certificado inválido vira achado em vez de abortar: só cabeçalhos são lidos e nada sensível é enviado.
+    rejectUnauthorized: false,
     headers: { "User-Agent": USER_AGENT, Accept: "*/*" }, maxHeaderSize: 16 * 1024, timeout: TIMEOUT_MS
   }, res => {
     const remote = res.socket?.remoteAddress;
     const raw = res.headers;
+    const socket = res.socket as TLSSocket;
+    const cert = socket.getPeerCertificate?.();
+    const authError = socket.authorizationError as unknown as string | Error | null | undefined;
+    const tls: TlsInfo = {
+      authorized: socket.authorized, protocol: socket.getProtocol?.() ?? null,
+      authorizationError: !authError ? null : typeof authError === "string" ? authError : (authError as Error & { code?: string }).code ?? authError.message,
+      validTo: cert?.valid_to ? new Date(cert.valid_to).toISOString() : null,
+      issuer: [cert?.issuer?.O, cert?.issuer?.CN].flat().find(Boolean) ?? null
+    };
     res.destroy();
     if (remote && remote.replace(/^::ffff:/, "") !== pinned.address.replace(/^::ffff:/, "")) return reject(new Error("A conexão não corresponde ao endereço validado."));
     const setCookie = raw["set-cookie"];
     resolve({
       status: res.statusCode ?? 0,
       header: name => { const value = raw[name.toLowerCase()]; return Array.isArray(value) ? value.join(", ") : value; },
-      cookies: Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : []
+      cookies: Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [],
+      tls
     });
   });
   req.on("timeout", () => req.destroy(new Error("Tempo limite excedido ao contatar o alvo.")));
@@ -94,7 +115,7 @@ export function analyzeResponse(asset: Pick<Asset, "url">, response: ObservedRes
   return findings;
 }
 
-export type AssessDeps = { config?: ScannerConfig; resolve?: Resolver; fetcher?: Fetcher };
+export type AssessDeps = { config?: ScannerConfig; resolve?: Resolver; fetcher?: Fetcher; dns?: DnsLookup; now?: Date };
 
 /** Falha de rede ao contatar o alvo (tempo limite, conexão recusada): vale tentar de novo mais tarde. */
 export class TransientAssessmentError extends Error {}
@@ -109,5 +130,5 @@ export async function assess(asset: Pick<Asset, "url">, deps: AssessDeps = {}): 
     throw new TransientAssessmentError(error instanceof Error ? error.message : "Falha de rede ao contatar o alvo.");
   }
   if (response.status >= 300 && response.status < 400) throw new Error("O alvo respondeu com redirecionamento; o MVP não segue redirects.");
-  return analyzeResponse(asset, response);
+  return [...analyzeResponse(asset, response), ...analyzeTls(response.tls, deps.now), ...await checkDns(url.hostname, deps.dns ?? systemDns())];
 }
