@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
+import { retentionView } from "@/db/retention";
 import { organizations } from "@/db/schema";
 import { withAuth } from "@/lib/auth/http";
 import { organizationSchema, parseJson } from "@/lib/validation";
 export const runtime = "nodejs";
 
-const view = (org: typeof organizations.$inferSelect) => ({ id: org.id, name: org.name, slug: org.slug, requireMfa: org.requireMfa });
+const view = (org: typeof organizations.$inferSelect) => ({ id: org.id, name: org.name, slug: org.slug, requireMfa: org.requireMfa, retention: retentionView(org) });
 
 export const GET = withAuth("asset:read", async ({ organizationId }) => {
   const [org] = await (await getDb()).select().from(organizations).where(eq(organizations.id, organizationId));

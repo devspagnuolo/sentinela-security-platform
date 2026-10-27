@@ -26,6 +26,7 @@ export const PATCH = withAuth("user:manage", async ({ organizationId, role, user
   const members = memberRepository(db, organizationId);
   const target = await members.get(id);
   if (!target) return deny("Usuário não encontrado.", 404);
+  if (target.anonymized) return deny("Conta anonimizada: não pode ser alterada nem reativada.", 409);
   if (!canManageRole(role, target.role) || (changes.role && !canManageRole(role, changes.role))) return deny("Seu papel não permite alterar este usuário.");
   if (target.id === actor.id && (changes.role || changes.disabled)) return deny("Você não pode alterar o próprio papel nem desativar a própria conta.");
   const losesOwner = target.role === "owner" && !target.disabled && ((changes.role && changes.role !== "owner") || changes.disabled);

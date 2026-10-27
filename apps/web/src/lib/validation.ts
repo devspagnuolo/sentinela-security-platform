@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { WEBHOOK_EVENT_TYPES, webhookUrlError, type WebhookEvent } from "./webhooks";
 import { normalizeHostPattern } from "./scope";
+import { AUDIT_RETENTION_OPTIONS, CONTACT_RETENTION_OPTIONS, DATA_RETENTION_OPTIONS } from "./retention-options";
 
 export const createAssetSchema = z.object({
   name: z.string().trim().max(100).optional().default(""),
@@ -121,3 +122,13 @@ export const webhookUpdateSchema = z.object({ name: webhookSchema.shape.name.opt
   .refine(v => Object.values(v).some(x => x !== undefined), "Nada para alterar.");
 
 export const preferencesSchema = z.object({ emailNotifications: z.boolean({ error: "Informe se quer receber os avisos por e-mail." }) });
+
+const retentionChoice = (options: readonly number[]) => z.literal(options as number[], { error: `Prazo aceito: ${options.join(", ")} dias.` });
+export const retentionSchema = z.object({
+  auditRetentionDays: retentionChoice(AUDIT_RETENTION_OPTIONS).optional(),
+  assessmentRetentionDays: retentionChoice(DATA_RETENTION_OPTIONS).nullable().optional(),
+  closedFindingRetentionDays: retentionChoice(DATA_RETENTION_OPTIONS).nullable().optional(),
+  scopeContactRetentionDays: retentionChoice(CONTACT_RETENTION_OPTIONS).optional()
+}).refine(v => Object.values(v).some(x => x !== undefined), "Nada para alterar.");
+
+export const anonymizeSchema = z.object({ confirmEmail: z.string().trim().min(1, "Digite o e-mail da pessoa para confirmar.").max(320) });

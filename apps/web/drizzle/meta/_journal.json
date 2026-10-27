@@ -57,6 +57,13 @@
       "when": 1793139355104,
       "tag": "0007_email_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793143799165,
+      "tag": "0008_lgpd_retention",
+      "breakpoints": true
     }
   ]
 }

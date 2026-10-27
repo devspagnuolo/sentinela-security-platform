@@ -2,6 +2,7 @@ import { and, asc, eq, gt, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { notify, pruneNotifications, sendPendingEmails } from "@/db/notifications";
 import { scopeEvent, tenantRepository } from "@/db/repository";
+import { applyRetention } from "@/db/retention";
 import { drainDeliveries, emitEvent, pruneDeliveries } from "@/db/webhooks";
 import { assessments, assets, authorizations, findings } from "@/db/schema";
 import { logger } from "./logger";
@@ -122,7 +123,7 @@ export async function drainQueue(db: Database, deps: WorkerDeps = {}, concurrenc
 
 // ---- Loop em segundo plano (iniciado por src/instrumentation.ts) -------------------
 
-type WorkerState = { timer?: NodeJS.Timeout; running: boolean; again: boolean; stopped: boolean; lastHousekeeping: number; wake?: () => void };
+type WorkerState = { timer?: NodeJS.Timeout; running: boolean; again: boolean; stopped: boolean; lastHousekeeping: number; lastRetention: number; wake?: () => void };
 const g = globalThis as typeof globalThis & { sentinelaWorker?: WorkerState };
 
 export function workerSettings(env: NodeJS.ProcessEnv = process.env) {
@@ -136,7 +137,7 @@ export function workerSettings(env: NodeJS.ProcessEnv = process.env) {
 /** Inicia o loop (uma vez por processo). `getDb` é chamado a cada ciclo para tolerar o banco subir depois. */
 export function startWorker(getDb: () => Promise<Database>, settings = workerSettings()) {
   if (!settings.enabled || g.sentinelaWorker) return;
-  const state: WorkerState = { running: false, again: false, stopped: false, lastHousekeeping: 0 };
+  const state: WorkerState = { running: false, again: false, stopped: false, lastHousekeeping: 0, lastRetention: 0 };
   g.sentinelaWorker = state;
   const tick = async () => {
     if (state.stopped) return;
@@ -149,6 +150,8 @@ export function startWorker(getDb: () => Promise<Database>, settings = workerSet
       await recoverStale(db, now);
       await scheduleDue(db, now);
       if (now.getTime() - state.lastHousekeeping >= 60_000) { await housekeeping(db, now); state.lastHousekeeping = now.getTime(); }
+      // Prazos de retenção (LGPD) de hora em hora: apagam em lote, não precisam rodar a cada minuto.
+      if (now.getTime() - state.lastRetention >= 3_600_000) { await applyRetention(db, now); state.lastRetention = now.getTime(); }
       await drainQueue(db, {}, settings.concurrency);
       // Webhooks por último: inclui os eventos que as avaliações deste ciclo acabaram de gerar.
       await drainDeliveries(db);
