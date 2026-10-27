@@ -1,41 +1,49 @@
 # Sentinela
 
-Plataforma SaaS de assessment de segurança autorizado. Este repositório contém o MVP: cadastro de ativos em escopo, execução manual de verificações de metadados HTTP não intrusivas, achados e exportação JSON/CSV. Nenhuma exploração ou tentativa de autenticação é implementada.
+Ferramenta de uso individual para avaliações defensivas de sites e APIs de empresas que autorizaram formalmente o trabalho. O objetivo é registrar o escopo, identificar sinais de fragilidade com verificações não intrusivas e produzir um relatório que explique o método, os riscos observados e as correções sugeridas.
 
-## Segurança e autorização
+## Estado atual
 
-- Cadastre somente ativos para os quais sua organização tenha autorização formal.
-- O MVP aceita apenas URLs HTTPS públicas, bloqueia loopback, redes privadas/link-local e IPs literais.
-- Cada alvo precisa estar explicitamente cadastrado e aprovado antes da análise.
-- O scanner exige `SENTINELA_ENABLE_SCANNER=1` e uma lista explícita de hostnames em `SENTINELA_ALLOWED_HOSTS`. Faz uma requisição GET para a URL raiz, sem seguir redirects, com timeout de 5 segundos e sem persistir o corpo.
-- Não há varredura de portas, força bruta, exploração, crawling, execução remota ou alteração de dados.
-- O modo de desenvolvimento usa dados locais demonstrativos; não é adequado para produção nem multiempresa.
+Este repositório contém um protótipo Next.js. O painel usa dados demonstrativos em memória; eles não representam clientes reais. O scanner implementa apenas uma requisição HTTPS GET à raiz de um hostname aprovado, sem seguir redirecionamentos. Ele observa cabeçalhos HTTP, CORS, atributos de cookies e banners. Esses sinais são indicativos e precisam de análise contextual antes de serem apresentados como vulnerabilidades confirmadas.
 
-## Executar
+O relatório individual por ativo está disponível em JSON e HTML imprimível, com escopo, referência de autorização, método, limitações, achados, evidências e recomendações. No navegador, a versão HTML pode ser salva como PDF. Consulte [a metodologia](docs/methodology.md) e [o modelo de relatório](docs/report-template.md).
 
-Requisitos: Node.js 20+ e npm.
+## Autorização e limites
+
+- Avalie somente ativos e janelas cobertos por autorização formal do proprietário.
+- O operador deve registrar a referência da autorização e configurar explicitamente os hostnames permitidos em `SENTINELA_ALLOWED_HOSTS`.
+- O scanner fica desabilitado por padrão; `SENTINELA_ENABLE_SCANNER=1` habilita a execução somente para os hostnames da lista.
+- Apenas URLs HTTPS com hostname DNS público são aceitas. IPs literais, redes privadas, loopback e portas alternativas são bloqueados.
+- Não há exploração, autenticação forçada, varredura de portas, crawling, escrita no alvo ou persistência de corpos de resposta.
+- O protótipo não tem autenticação de operador, persistência confiável nem proteção completa contra mudança de DNS entre validação e conexão. Não o exponha na internet nem use dados reais de clientes até concluir esses controles.
+
+## Fluxo previsto para a consultoria
+
+1. Registrar cliente, responsável, autorização, janela, domínios e limitações do teste.
+2. Revisar o escopo e ativar somente os hostnames aprovados.
+3. Executar verificações de baixo impacto e registrar horário, método e evidência mínima.
+4. Revisar manualmente cada achado, impacto e severidade; evitar classificar ausência de header como falha explorável por si só.
+5. Entregar relatório executivo e técnico por cliente, com riscos, recomendações e plano de correção.
+6. Reavaliar após as correções e registrar a mudança de status.
+
+## Executar o protótipo
+
+Requisitos: Node.js 20+ e npm. Após obter o código do GitHub:
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Abra http://localhost:3000. Os dados do painel são demonstrativos. Ativos novos permanecem pendentes; o MVP ainda não oferece um fluxo de aprovação. Para habilitar avaliações em um ambiente de desenvolvimento controlado, configure `SENTINELA_ENABLE_SCANNER=1` e `SENTINELA_ALLOWED_HOSTS=host.exemplo.com` no processo do servidor, após registrar a autorização formal.
+Abra http://localhost:3000. Os ativos novos só ficam aptos à avaliação quando o hostname consta na lista do operador e a autorização é confirmada no cadastro. Os dados e indicadores iniciais são apenas demonstrativos.
 
-## Estrutura
+## Próximos marcos
 
-- `apps/web`: interface Next.js, painel e API de desenvolvimento.
-- `apps/web/src/lib/scanner.ts`: checagens de metadados HTTP e validação inicial de escopo.
-- `docs/architecture.md`: arquitetura-alvo e próximos marcos.
-- `docker-compose.yml`: PostgreSQL e Redis para desenvolvimento local.
-
-## Próximos passos
-
-1. Persistência multiempresa, autenticação OIDC/MFA e RBAC no NestJS.
-2. Fluxo de evidência e aprovação de autorização com trilha imutável de auditoria.
-3. Fila de tarefas RabbitMQ com limites por tenant e worker isolado.
-4. Integrações cloud somente por APIs oficiais read-only e credenciais federadas.
-5. Relatórios PDF/XLSX e correlação assistida por IA com revisão humana.
+1. Autenticação de operador e armazenamento seguro de clientes, autorizações, avaliações e relatórios.
+2. Validação de escopo com DNS fixado na conexão, limites de resposta e auditoria de execução.
+3. Verificações TLS, inventário passivo de tecnologias e conectores cloud read-only.
+4. Relatórios PDF/XLSX, revisão de achados e histórico de reavaliações.
+5. Deploy privado e controle de acesso para uso individual.
 
 ## Licença
 

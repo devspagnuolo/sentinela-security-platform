@@ -53,6 +53,8 @@ export async function assess(asset: Asset): Promise<Finding[]> {
     }
     const server = headers.get("server");
     if (server && /\d/.test(server)) findings.push(makeFinding(asset,"Banner de servidor revela versão","info","Exposição de informações","O cabeçalho Server aparenta expor uma versão.",`Server: ${server.slice(0,80)}`,"Remova versões detalhadas dos banners e mantenha o software atualizado."));
+    const poweredBy = headers.get("x-powered-by");
+    if (poweredBy) findings.push(makeFinding(asset,"Tecnologia anunciada pelo servidor","info","Inventário tecnológico","O cabeçalho X-Powered-By anuncia uma tecnologia; este dado pode não refletir a versão real.",`X-Powered-By: ${poweredBy.slice(0,80)}`,"Confirme o inventário e evite divulgar detalhes de versão desnecessários."));
     await response.body?.cancel();
     return findings;
   } finally { clearTimeout(timer); }

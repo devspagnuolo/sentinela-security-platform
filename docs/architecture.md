@@ -1,34 +1,33 @@
-# Arquitetura e limites do produto
+# Arquitetura para uso individual
 
-## MVP implementado
+## Objetivo
 
-Next.js entrega uma UI de painel e rotas API locais para inventário, execução de avaliação e exportação JSON/CSV. O scanner realiza uma única requisição HTTPS GET ao host cadastrado, sem seguir redirecionamentos. Avalia status da resposta, headers defensivos, política CORS observada, atributos de cookies, headers de resposta e alguns atributos de cookies. A evidência é limitada a valores de headers e metadados; o corpo não é persistido.
+Sentinela é uma estação de trabalho privada para um consultor de segurança. Cada projeto pertence a um cliente e guarda escopo autorizado, janelas de análise, contatos, ativos, execuções, achados revisados e relatórios. Multiempresa significa separação de projetos e dados, não um SaaS compartilhado nem gestão de usuários de clientes.
 
-## Arquitetura SaaS proposta
+## Estado implementado
+
+A interface Next.js e suas rotas API usam memória do processo para demonstração. O scanner faz uma requisição HTTPS GET para a URL raiz, sem redirecionamento, com timeout de 5 segundos. Verifica alguns cabeçalhos defensivos, política CORS observada, atributos de cookies e banner Server. O corpo da resposta não é persistido. O relatório por ativo apresenta método, evidências mínimas, limitações e recomendações em JSON ou HTML imprimível.
+
+## Fluxo de dados proposto
 
 ```text
-Next.js (web) -> NestJS API -> PostgreSQL
-                           -> RabbitMQ -> workers isolados de assessment
-                           -> Redis (limites/cache efêmero)
-OIDC/MFA -> gateway de identidade; logs de auditoria -> armazenamento append-only
+Navegador do operador -> aplicação privada -> banco de projetos
+                                      -> fila de avaliações -> worker com saída restrita
+                                      -> armazenamento criptografado de relatórios
 ```
 
-Cada entidade de negócio deve carregar `tenant_id`; políticas PostgreSQL RLS e autorização no serviço devem aplicar isolamento. Workers recebem somente alvos aprovados e capacidades allowlisted, sem credenciais por padrão. Para cloud, adotar papéis read-only e federação temporária, nunca chaves estáticas. Segredos ficam em secret manager; Terraform e Kubernetes devem aplicar rede de saída restrita e limites de recursos.
+O primeiro marco de produção deve exigir autenticação do operador, criptografia, backup, auditoria e segregação por cliente. Um banco PostgreSQL é suficiente para os registros. Redis e RabbitMQ são opcionais até haver tarefas assíncronas em escala. Kubernetes, Terraform e conectores cloud devem ser introduzidos apenas quando houver necessidade operacional concreta.
 
-## Autorização e segurança do scanner
+## Modelo de autorização
 
-- Consentimento formal é um requisito de negócio para habilitar qualquer ativo.
-- Aprovação registra responsável, escopo exato, janela, data de expiração e limites.
-- Bloquear por padrão IPs privados, loopback, link-local, multicast e esquemas que não sejam HTTPS.
-- Resolver DNS e validar todos os endereços antes da conexão; proteger contra DNS rebinding e redirects para fora do escopo.
-- Aplicar quotas por tenant, concorrência baixa, timeout, tamanho máximo de resposta e kill switch.
-- Auditar criação/aprovação do escopo, execução, cancelamento, acesso a evidências e exportações.
-- Não armazenar tokens, cookies completos, corpos contendo dados pessoais ou segredos encontrados.
+Cada autorização registra cliente, responsável, referência documental, hostnames exatos, janela de início e término, métodos permitidos, limites de taxa, exclusões e contato de emergência. O worker recebe um escopo assinado e expira a execução ao fim da janela. A configuração de hostnames no ambiente é um bloqueio adicional; não substitui a autorização formal.
 
-## Taxonomia
+Antes de cada conexão, o worker deve validar o hostname, resolver DNS, rejeitar IPs privados e fixar o endereço validado para a conexão TLS. Redirecionamentos ficam desabilitados por padrão. Timeouts, limite de bytes, concorrência baixa e cancelamento devem ser obrigatórios. Nenhum dado sensível da resposta deve ser guardado sem necessidade.
 
-Achados devem manter referências versionadas a CVSS, CWE, OWASP Top 10, MITRE ATT&CK (quando aplicável) e CIS Controls. ATT&CK/CIS são contexto de mapeamento, não pontuação automática. Recomendações geradas por IA precisam apontar evidência e referência, com revisão humana; nunca enviar dados sensíveis a modelos sem política explícita.
+## Interpretação dos resultados
 
-## Fora do MVP
+A ausência de cabeçalho ou um banner é um indicador de configuração, não prova de exploração. A severidade depende de contexto, exposição, compensações e impacto para o cliente. CVSS, CWE, OWASP, MITRE ATT&CK e CIS podem ser referências quando cabíveis; nunca atribua mapeamentos ou notas automáticas sem evidência. O operador revisa e aprova todos os achados antes da entrega.
 
-Autenticação corporativa real, multi-tenancy, descoberta recursiva de subdomínios, port scanning, crawling, testes autenticados, cloud connectors, RabbitMQ workers, PDF/XLSX, compliance automatizado e uso de IA. Esses componentes exigem projeto de segurança, controles de autorização e testes próprios antes de produção.
+## Limites atuais
+
+Sem autenticação, persistência, aprovação com validade, DNS fixado, varredura TLS, descoberta ampla, testes autenticados, cloud, PDF gerado no servidor ou IA. O protótipo não deve receber dados reais de clientes nem ser exposto publicamente até que os controles essenciais estejam implementados.
