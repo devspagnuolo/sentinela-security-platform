@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth/http";
 import { FINDING_STATUS_LABELS, SEVERITY_LABELS } from "@/lib/labels";
+import { SCANNER_METHODS } from "@/lib/scanner";
 export const runtime = "nodejs";
 
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"\u0027]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\u0022": "&quot;", "\u0027": "&#39;" } as Record<string, string>)[char] ?? char);
-const method = { id: "SENTINELA-HTTP-001", name: "Inspeção não intrusiva de metadados HTTP", request: "Uma requisição HTTPS GET à raiz; sem seguir redirecionamentos; timeout de 5 segundos", checks: ["Headers defensivos", "CORS observado", "Atributos de cookies", "Banners Server e X-Powered-By"], exclusions: ["Exploração", "Teste de autenticação ou autorização", "Varredura de portas", "Crawling", "Análise de corpo ou dados pessoais"] };
 
 export const GET = withAuth("report:read", async ({ repo }, request, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
@@ -13,6 +13,7 @@ export const GET = withAuth("report:read", async ({ repo }, request, { params }:
   const latest = await repo.latestCompletedAssessment(id);
   if (!latest) return NextResponse.json({ error: "Nenhuma avaliação concluída para este ativo." }, { status: 404 });
   const { run, findings } = latest;
+  const method = SCANNER_METHODS[run.method] ?? { id: run.method, name: "Método registrado na execução", request: "Ver metodologia", checks: [], exclusions: [] };
   const report = {
     version: "0.2", generatedAt: new Date().toISOString(), classification: "Rascunho para revisão do avaliador",
     demonstration: asset.authorizationRef.startsWith("DEMO-"),
@@ -20,7 +21,7 @@ export const GET = withAuth("report:read", async ({ repo }, request, { params }:
     authorization: { reference: asset.authorizationRef, state: asset.scopeState, validUntil: asset.scopeValidUntil },
     assessment: { id: run.id, startedAt: run.startedAt, status: run.status, method },
     summary: { total: findings.length, bySeverity: Object.fromEntries(["critical", "high", "medium", "low", "info"].map(severity => [severity, findings.filter(item => item.severity === severity).length])) },
-    limitations: "Apenas a raiz HTTPS e metadados da resposta foram observados. Os indicadores exigem revisão contextual; ausência de achados não comprova segurança.",
+    limitations: "Apenas a raiz HTTPS, o certificado apresentado nessa conexão e registros DNS públicos foram observados. Os indicadores exigem revisão contextual; ausência de achados não comprova segurança.",
     findings: findings.map(item => ({ id: item.id, title: item.title, severity: item.severity, status: item.status, statusReason: item.statusReason, category: item.category, observation: item.description, evidence: item.evidence, potentialRisk: "O impacto depende do contexto da aplicação e deve ser validado pelo avaliador.", recommendation: item.recommendation, references: item.references, discoveredAt: item.discoveredAt }))
   };
   const format = new URL(request.url).searchParams.get("format") ?? "json";
