@@ -29,7 +29,7 @@ O relatório individual por ativo está disponível em JSON e HTML imprimível, 
 
 ## Executar o protótipo
 
-Requisitos: Node.js 20+ e npm. Após obter o código do GitHub:
+Requisitos: Node.js 22.12+ (LTS) e npm. Após obter o código do GitHub:
 
 ```powershell
 npm ci

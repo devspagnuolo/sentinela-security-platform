@@ -7,6 +7,13 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # typescript-eslint (usado por eslint-config-next) suporta apenas TypeScript < 6.1.
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
+      # eslint-plugin-react, -import e -jsx-a11y ainda exigem ESLint 9.
+      - dependency-name: eslint
+        versions: [">=10.0.0"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
