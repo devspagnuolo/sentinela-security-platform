@@ -9,20 +9,22 @@ export const SESSION_IDLE_MS = 2 * 60 * 60 * 1000;
 const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 
 export type SessionUser = { id: string; email: string; name: string };
+export type AuthMethod = "password" | "mfa" | "sso";
 export type ActiveSession = {
   id: string; organizationId: string; role: Role; user: SessionUser; expiresAt: Date;
   /** Usuário tem MFA ativo. */
   mfaEnabled: boolean;
-  /** A organização exige MFA e o usuário ainda não cadastrou: só pode acessar a própria conta. */
+  /** A organização exige MFA e o usuário ainda não cadastrou: só pode acessar a própria conta. Login via SSO cumpre a exigência. */
   mfaEnrollmentRequired: boolean;
+  authMethod: AuthMethod;
 };
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
-export async function createSession(db: Database, input: { userId: string; organizationId: string; ip?: string | null; userAgent?: string | null }, now = new Date()) {
+export async function createSession(db: Database, input: { userId: string; organizationId: string; authMethod?: AuthMethod; ip?: string | null; userAgent?: string | null }, now = new Date()) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
-  await db.insert(sessions).values({ id: hashToken(token), userId: input.userId, organizationId: input.organizationId, createdAt: now, lastSeenAt: now, expiresAt, ip: input.ip?.slice(0, 64) ?? null, userAgent: input.userAgent?.slice(0, 256) ?? null });
+  await db.insert(sessions).values({ id: hashToken(token), userId: input.userId, organizationId: input.organizationId, authMethod: input.authMethod ?? "password", createdAt: now, lastSeenAt: now, expiresAt, ip: input.ip?.slice(0, 64) ?? null, userAgent: input.userAgent?.slice(0, 256) ?? null });
   return { token, expiresAt };
 }
 
@@ -42,7 +44,7 @@ export async function validateSession(db: Database, token: string | undefined, n
     return null;
   }
   if (now.getTime() - row.session.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) await db.update(sessions).set({ lastSeenAt: now }).where(eq(sessions.id, id));
-  return { id, organizationId: row.session.organizationId, role: row.role, user: { id: row.user.id, email: row.user.email, name: row.user.name }, expiresAt: row.session.expiresAt, mfaEnabled: Boolean(row.user.totpEnabledAt), mfaEnrollmentRequired: row.requireMfa && !row.user.totpEnabledAt };
+  return { id, organizationId: row.session.organizationId, role: row.role, user: { id: row.user.id, email: row.user.email, name: row.user.name }, expiresAt: row.session.expiresAt, mfaEnabled: Boolean(row.user.totpEnabledAt), mfaEnrollmentRequired: row.requireMfa && !row.user.totpEnabledAt && row.session.authMethod !== "sso", authMethod: row.session.authMethod as AuthMethod };
 }
 
 export async function revokeSession(db: Database, token: string | undefined) {

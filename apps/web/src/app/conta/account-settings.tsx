@@ -2,12 +2,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import SsoSettings from "./sso-settings";
 import { ArrowLeft, Download, KeyRound, LogOut, ShieldCheck, ShieldOff } from "lucide-react";
 
 type Props = {
   user: { id: string; email: string; name: string };
   mfaEnabled: boolean; mfaEnrollmentRequired: boolean; recoveryCodesLeft: number;
-  canManageOrg: boolean; orgRequiresMfa: boolean;
+  canManageOrg: boolean; orgRequiresMfa: boolean; hasPassword: boolean; signedInWithSso: boolean;
 };
 type Setup = { secret: string; uri: string; qrSvg: string };
 
@@ -84,6 +85,7 @@ export default function AccountSettings(props: Props) {
 
     <section className="account-card">
       <h2><ShieldCheck size={18}/>Verificação em duas etapas</h2>
+      {props.signedInWithSso && <p className="hint">Você entrou pelo SSO da organização; a verificação do provedor já vale para este acesso. O código do app é usado quando você entra com senha.</p>}
       {codes ? <>
         <p>Guarde estes códigos em um local seguro, como um gerenciador de senhas. Cada um permite entrar uma única vez se você perder o celular. Eles não serão exibidos novamente.</p>
         <ul className="recovery-codes">{codes.map(c => <li key={c}><code>{c}</code></li>)}</ul>
@@ -119,13 +121,15 @@ export default function AccountSettings(props: Props) {
       </>}
     </section>
 
+    {props.canManageOrg && <SsoSettings />}
+
     {props.canManageOrg && <section className="account-card">
       <h2>Política da organização</h2>
       <p>{props.orgRequiresMfa ? "Todos os usuários precisam usar verificação em duas etapas." : "A verificação em duas etapas é opcional para os usuários."}</p>
       <button className="button button-secondary" disabled={busy} onClick={() => void toggleOrgMfa()}>{props.orgRequiresMfa ? "Tornar opcional" : "Exigir de todos os usuários"}</button>
     </section>}
 
-    <section className="account-card">
+    {props.hasPassword && <section className="account-card">
       <h2><KeyRound size={18}/>Alterar senha</h2>
       <form className="stack-form" onSubmit={changePassword}>
         <input type="password" autoComplete="current-password" placeholder="Senha atual" required value={passwords.currentPassword} onChange={e => setPasswords({ ...passwords, currentPassword: e.target.value })} />
@@ -133,6 +137,6 @@ export default function AccountSettings(props: Props) {
         <input type="password" autoComplete="new-password" placeholder="Repita a nova senha" required minLength={12} value={passwords.repeat} onChange={e => setPasswords({ ...passwords, repeat: e.target.value })} />
         <button className="button button-primary" disabled={busy}>Alterar senha</button>
       </form>
-    </section>
+    </section>}
   </main>;
 }

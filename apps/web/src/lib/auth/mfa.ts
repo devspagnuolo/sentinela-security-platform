@@ -68,7 +68,7 @@ export async function completeMfaLogin(db: Database, challengeToken: string, cod
   }
   await db.delete(mfaChallenges).where(eq(mfaChallenges.id, id));
   await db.update(users).set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: now }).where(eq(users.id, user.id));
-  const session = await createSession(db, { userId: user.id, organizationId: challenge.organizationId, ...meta }, now);
+  const session = await createSession(db, { userId: user.id, organizationId: challenge.organizationId, authMethod: "mfa", ...meta }, now);
   await audit.audit("auth.login_succeeded", "user", user.id, { ip: meta.ip ?? null, mfa: method });
   return { ok: true, method, ...session };
 }
