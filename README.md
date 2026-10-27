@@ -78,6 +78,10 @@ Integrações autenticam com **tokens de API** pessoais, criados em **Minha cont
 
 Com SMTP configurado (`SENTINELA_SMTP_URL` e `SENTINELA_MAIL_FROM`), os avisos do sino também chegam por e-mail. Cada pessoa pode desligar os e-mails em **Minha conta**, e Admins enviam um e-mail de teste em **Integrações**. Sem essa configuração, os avisos ficam só na aplicação.
 
+## LGPD
+
+O Owner define em **Minha conta** por quanto tempo ficam a auditoria (mínimo de 6 meses), as avaliações antigas, os achados encerrados e o contato de emergência de escopos encerrados, e o worker apaga o que passou do prazo. Cada pessoa baixa os próprios dados em JSON, o Owner exporta a organização inteira e pode anonimizar quem saiu, mantendo as ações na auditoria sem identificar a pessoa. Inventário de dados, prazos e como atender cada direito do titular estão em [docs/lgpd.md](docs/lgpd.md).
+
 ## Produção
 
 A imagem Docker (`Dockerfile`, compatível com x86 e ARM) e o compose de produção (`deploy/`) sobem PostgreSQL, aplicação, Caddy com HTTPS automático e backup diário. O passo a passo para uma VM gratuita do Oracle Cloud está em [docs/deploy-oracle-cloud.md](docs/deploy-oracle-cloud.md). A aplicação expõe `/api/health` (com `?ready=1` também verifica o banco), escreve logs estruturados em JSON e mantém uma trilha de auditoria consultável em **Auditoria**, com exportação CSV.

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ApiTokens from "./api-tokens";
 import SsoSettings from "./sso-settings";
+import { PersonalDataCard, RetentionSettingsCard } from "./privacy-settings";
+import type { RetentionSettings } from "@/lib/retention-options";
 import type { Role } from "@/lib/auth/rbac";
 import { ArrowLeft, Download, KeyRound, LogOut, Mail, ShieldCheck, ShieldOff } from "lucide-react";
 
@@ -14,6 +16,7 @@ type Props = {
   /** Papéis que esta pessoa pode dar a um token de API. */
   tokenRoles: Role[];
   emailNotifications: boolean; mailConfigured: boolean;
+  retention: RetentionSettings;
 };
 type Setup = { secret: string; uri: string; qrSvg: string };
 
@@ -147,6 +150,10 @@ export default function AccountSettings(props: Props) {
       <p>{props.orgRequiresMfa ? "Todos os usuários precisam usar verificação em duas etapas." : "A verificação em duas etapas é opcional para os usuários."}</p>
       <button className="button button-secondary" disabled={busy} onClick={() => void toggleOrgMfa()}>{props.orgRequiresMfa ? "Tornar opcional" : "Exigir de todos os usuários"}</button>
     </section>}
+
+    {props.canManageOrg && <RetentionSettingsCard initial={props.retention} />}
+
+    {!props.mfaEnrollmentRequired && <PersonalDataCard />}
 
     {props.hasPassword && <section className="account-card">
       <h2><KeyRound size={18}/>Alterar senha</h2>

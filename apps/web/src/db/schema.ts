@@ -23,6 +23,12 @@ export const organizations = pgTable("organizations", {
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
   requireMfa: boolean("require_mfa").notNull().default(false),
+  // Retenção (LGPD, docs/lgpd.md), aplicada pelo worker. null = manter enquanto a organização existir.
+  auditRetentionDays: integer("audit_retention_days").notNull().default(730),
+  assessmentRetentionDays: integer("assessment_retention_days"),
+  closedFindingRetentionDays: integer("closed_finding_retention_days"),
+  // Dias depois do fim do escopo (revogado ou vencido) até apagar o contato de emergência.
+  scopeContactRetentionDays: integer("scope_contact_retention_days").notNull().default(180),
   ...timestamps
 });
 
@@ -171,7 +177,8 @@ export const findings = pgTable("findings", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: orgRef(),
   assetId: uuid("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
-  assessmentId: uuid("assessment_id").references(() => assessments.id, { onDelete: "cascade" }),
+  // Execução que encontrou o achado pela primeira vez; apagar a execução (retenção) não apaga o achado.
+  assessmentId: uuid("assessment_id").references(() => assessments.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   severity: severityEnum("severity").notNull(),
   category: text("category").notNull(),

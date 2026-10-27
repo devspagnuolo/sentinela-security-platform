@@ -4,7 +4,10 @@ import { hashPassword } from "@/lib/auth/password";
 import type { Database } from "./client";
 import { memberships, users } from "./schema";
 
-export type Member = { id: string; email: string; name: string; role: Role; disabled: boolean; mfaEnabled: boolean; lastLoginAt: string | null; createdAt: string };
+export type Member = { id: string; email: string; name: string; role: Role; disabled: boolean; mfaEnabled: boolean; lastLoginAt: string | null; createdAt: string; anonymized: boolean };
+
+// Domínio reservado (RFC 2606) usado na anonimização (src/db/privacy.ts): nunca recebe e-mail.
+export const ANONYMIZED_DOMAIN = "anonimizado.invalid";
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -20,7 +23,7 @@ export async function primaryMembership(db: Database, userId: string) {
 }
 
 const memberColumns = { id: users.id, email: users.email, name: users.name, role: memberships.role, disabled: users.disabled, totpEnabledAt: users.totpEnabledAt, lastLoginAt: users.lastLoginAt, createdAt: users.createdAt };
-const toMember = ({ totpEnabledAt, ...row }: { id: string; email: string; name: string; role: Role; disabled: boolean; totpEnabledAt: Date | null; lastLoginAt: Date | null; createdAt: Date }): Member => ({ ...row, mfaEnabled: Boolean(totpEnabledAt), lastLoginAt: row.lastLoginAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString() });
+const toMember = ({ totpEnabledAt, ...row }: { id: string; email: string; name: string; role: Role; disabled: boolean; totpEnabledAt: Date | null; lastLoginAt: Date | null; createdAt: Date }): Member => ({ ...row, mfaEnabled: Boolean(totpEnabledAt), anonymized: row.email.endsWith(`@${ANONYMIZED_DOMAIN}`), lastLoginAt: row.lastLoginAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString() });
 
 /** Operações de membros sempre restritas a uma organização. */
 export function memberRepository(db: Database, organizationId: string) {

@@ -6,7 +6,7 @@ import { ArrowLeft, Plus } from "lucide-react";
 import { ROLE_LABELS, type Role } from "@/lib/auth/rbac";
 import type { Member } from "@/db/users";
 
-export default function UsersManager({ currentUserId, assignableRoles }: { currentUserId: string; assignableRoles: Role[] }) {
+export default function UsersManager({ currentUserId, assignableRoles, canAnonymize }: { currentUserId: string; assignableRoles: Role[]; canAnonymize: boolean }) {
   const router = useRouter();
   const [members, setMembers] = useState<Member[]>([]), [notice, setNotice] = useState("");
   const [form, setForm] = useState({ name: "", email: "", role: assignableRoles.at(-1) ?? "viewer", password: "" });
@@ -27,7 +27,11 @@ export default function UsersManager({ currentUserId, assignableRoles }: { curre
     e.preventDefault();
     if (await send("/api/users", "POST", form, "Usuário criado. Compartilhe a senha inicial por um canal seguro.")) setForm({ ...form, name: "", email: "", password: "" });
   }
-  const manageable = (m: Member) => m.id !== currentUserId && assignableRoles.includes(m.role);
+  const manageable = (m: Member) => m.id !== currentUserId && !m.anonymized && assignableRoles.includes(m.role);
+  function anonymize(m: Member) {
+    const typed = prompt(`Anonimizar ${m.name} apaga de vez o nome, o e-mail, a senha, a verificação em duas etapas, as sessões, os tokens e os avisos da pessoa, e remove IPs e e-mails dela da auditoria. As ações registradas continuam, atribuídas a "Pessoa removida". Não dá para desfazer.\n\nPara confirmar, digite o e-mail da pessoa:`);
+    if (typed) void send(`/api/users/${m.id}/anonymize`, "POST", { confirmEmail: typed }, "Dados pessoais removidos. A conta foi anonimizada.");
+  }
   return <main className="content users-page">
     <Link className="button button-secondary" href="/"><ArrowLeft size={15}/>Voltar ao painel</Link>
     <h1>Usuários</h1>
@@ -39,14 +43,15 @@ export default function UsersManager({ currentUserId, assignableRoles }: { curre
       <input placeholder="Senha inicial (12+ caracteres)" type="password" autoComplete="new-password" required minLength={12} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
       <button className="button button-primary"><Plus size={15}/>Criar</button>
     </form>}
-    <table className="users-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Último acesso</th><th>2 etapas</th><th>Status</th></tr></thead><tbody>
+    <div className="table-scroll"><table className="users-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Último acesso</th><th>2 etapas</th><th>Status</th></tr></thead><tbody>
       {members.map(m => <tr key={m.id}>
-        <td>{m.name}{m.id === currentUserId && " (você)"}</td><td>{m.email}</td>
+        <td>{m.name}{m.id === currentUserId && " (você)"}</td><td>{m.anonymized ? "—" : m.email}</td>
         <td>{manageable(m) ? <select value={m.role} onChange={e => void send(`/api/users/${m.id}`, "PATCH", { role: e.target.value }, "Papel atualizado.")}>{assignableRoles.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select> : ROLE_LABELS[m.role]}</td>
         <td>{m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleString("pt-BR") : "Nunca"}</td>
         <td>{m.mfaEnabled ? "Ativa" : "Não configurada"}{manageable(m) && m.mfaEnabled && <> <button className="run-button" onClick={() => { if (confirm(`Resetar a verificação em duas etapas de ${m.name}? A pessoa precisará configurá-la de novo e as sessões dela serão encerradas.`)) void send(`/api/users/${m.id}`, "PATCH", { resetMfa: true }, "Verificação em duas etapas resetada e sessões encerradas."); }}>Resetar</button></>}</td>
-        <td>{manageable(m) ? <button className="run-button" onClick={() => void send(`/api/users/${m.id}`, "PATCH", { disabled: !m.disabled }, m.disabled ? "Usuário reativado." : "Usuário desativado e sessões encerradas.")}>{m.disabled ? "Reativar" : "Desativar"}</button> : m.disabled ? "Desativado" : "Ativo"}</td>
+        <td>{m.anonymized ? "Anonimizado" : manageable(m) ? <button className="run-button" onClick={() => void send(`/api/users/${m.id}`, "PATCH", { disabled: !m.disabled }, m.disabled ? "Usuário reativado." : "Usuário desativado e sessões encerradas.")}>{m.disabled ? "Reativar" : "Desativar"}</button> : m.disabled ? "Desativado" : "Ativo"}
+          {canAnonymize && manageable(m) && <> <button className="run-button" onClick={() => anonymize(m)}>Anonimizar</button></>}</td>
       </tr>)}
-    </tbody></table>
+    </tbody></table></div>
   </main>;
 }
