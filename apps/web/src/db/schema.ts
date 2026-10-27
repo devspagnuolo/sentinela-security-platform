@@ -20,6 +20,7 @@ export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
+  requireMfa: boolean("require_mfa").notNull().default(false),
   ...timestamps
 });
 
@@ -33,6 +34,11 @@ export const users = pgTable("users", {
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
+  // Segredos TOTP criptografados com AES-256-GCM (src/lib/crypto.ts).
+  totpSecret: text("totp_secret"),
+  totpPendingSecret: text("totp_pending_secret"),
+  totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true }),
+  totpLastStep: bigint("totp_last_step", { mode: "number" }),
   ...timestamps
 }, t => [uniqueIndex("users_email_lower_idx").on(sql`lower(${t.email})`)]);
 
@@ -55,6 +61,24 @@ export const sessions = pgTable("sessions", {
   ip: text("ip"),
   userAgent: text("user_agent")
 }, t => [index("sessions_user_idx").on(t.userId), index("sessions_expires_idx").on(t.expiresAt)]);
+
+// Desafio emitido após a senha correta quando o usuário tem MFA; id = SHA-256 do token.
+export const mfaChallenges = pgTable("mfa_challenges", {
+  id: text("id").primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  organizationId: orgRef(),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+export const recoveryCodes = pgTable("recovery_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, t => [index("recovery_codes_user_idx").on(t.userId)]);
 
 export const clients = pgTable("clients", {
   id: uuid("id").primaryKey().defaultRandom(),

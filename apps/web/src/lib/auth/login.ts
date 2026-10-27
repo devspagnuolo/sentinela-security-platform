@@ -4,19 +4,21 @@ import { tenantRepository } from "@/db/repository";
 import { users } from "@/db/schema";
 import { findUserByEmail, primaryMembership } from "@/db/users";
 import { burnVerification, verifyPassword } from "./password";
+import { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./limits";
+import { createMfaChallenge } from "./mfa";
 import { createSession } from "./session";
 
-export const MAX_FAILED_LOGINS = 5;
-export const LOCKOUT_MS = 15 * 60 * 1000;
+export { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./limits";
 export const INVALID_CREDENTIALS = "E-mail ou senha inválidos.";
 
 type Meta = { ip?: string | null; userAgent?: string | null };
-export type LoginResult = { ok: true; token: string; expiresAt: Date } | { ok: false; error: string };
+export type LoginResult = { ok: true; token: string; expiresAt: Date } | { ok: "mfa"; challenge: string } | { ok: false; error: string };
 
 /**
  * Autentica por e-mail e senha. A resposta de erro é sempre a mesma (sem revelar
  * se o e-mail existe ou se a conta está bloqueada); após MAX_FAILED_LOGINS falhas
- * seguidas a conta fica bloqueada por LOCKOUT_MS.
+ * seguidas a conta fica bloqueada por LOCKOUT_MS. Usuários com MFA recebem um
+ * desafio em vez da sessão (segunda etapa em completeMfaLogin).
  */
 export async function login(db: Database, email: string, password: string, meta: Meta = {}, now = new Date()): Promise<LoginResult> {
   const user = await findUserByEmail(db, email);
@@ -38,6 +40,10 @@ export async function login(db: Database, email: string, password: string, meta:
     return { ok: false, error: INVALID_CREDENTIALS };
   }
 
+  if (user.totpEnabledAt) {
+    await audit.audit("auth.password_verified", "user", user.id, { ip: meta.ip ?? null });
+    return { ok: "mfa", challenge: await createMfaChallenge(db, user.id, membership.organizationId, now) };
+  }
   await db.update(users).set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: now }).where(eq(users.id, user.id));
   const session = await createSession(db, { userId: user.id, organizationId: membership.organizationId, ...meta }, now);
   await audit.audit("auth.login_succeeded", "user", user.id, { ip: meta.ip ?? null });

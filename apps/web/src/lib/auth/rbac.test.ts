@@ -9,7 +9,8 @@ const matrix: Record<Permission, Role[]> = {
   "export:download": ["owner", "admin", "analyst"],
   "audit:read": ["owner", "admin"],
   "user:read": ["owner", "admin"],
-  "user:manage": ["owner", "admin"]
+  "user:manage": ["owner", "admin"],
+  "org:manage": ["owner"]
 };
 
 describe("RBAC", () => {

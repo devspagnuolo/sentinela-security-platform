@@ -17,6 +17,7 @@ O relatório individual por ativo está disponível em JSON e HTML imprimível, 
 - Não há exploração, autenticação forçada, varredura de portas, crawling, escrita no alvo ou persistência de corpos de resposta.
 - A conexão usa o endereço IP validado na resolução DNS (sem nova consulta), o que impede DNS rebinding; apenas status e cabeçalhos são lidos, com limite de 16 KB, e o corpo nunca é baixado.
 - Todo acesso exige login. Senhas usam scrypt; sessões ficam no banco (só o hash do token), expiram em 12 h ou após 2 h sem uso, e o cookie é HttpOnly, SameSite=Lax e, em produção, Secure com prefixo `__Host-`. Após 5 senhas erradas seguidas a conta fica bloqueada por 15 minutos. Requisições que alteram dados precisam vir da mesma origem (proteção CSRF).
+- Verificação em duas etapas (TOTP, compatível com Google/Microsoft Authenticator, 1Password e similares) configurável em **Minha conta**, com 10 códigos de recuperação de uso único. O Owner pode torná-la obrigatória para toda a organização; quem ainda não configurou é levado à tela de configuração antes de acessar qualquer dado. Admins podem resetar o MFA de quem perdeu o celular. Os segredos TOTP ficam criptografados (AES-256-GCM) com `SENTINELA_ENCRYPTION_KEY`.
 - Papéis: **Owner** e **Admin** gerenciam usuários e leem a auditoria (Admin só gerencia Analistas e Leitores); **Analista** cadastra ativos, executa avaliações e exporta; **Leitor** só consulta ativos e relatórios. A organização sempre mantém ao menos um Owner ativo. Não o exponha na internet nem use dados reais de clientes até concluir esses controles.
 
 ## Fluxo previsto para a consultoria
@@ -64,7 +65,7 @@ Abra http://localhost:3000 e entre com `admin@sentinela.local` / `sentinela-demo
 
 O roadmap enterprise completo (multi-tenancy, RBAC, SSO, observabilidade e deploy) está em evolução; os marcos abaixo resumem a ordem.
 
-1. MFA (TOTP) e SSO via OIDC (Google Workspace, Entra ID, Okta).
+1. SSO via OIDC (Google Workspace, Entra ID, Okta).
 2. Auditoria de execução e autorizações com janela de validade no banco.
 3. Verificações TLS, inventário passivo de tecnologias e conectores cloud read-only.
 4. Relatórios PDF/XLSX, revisão de achados e histórico de reavaliações.

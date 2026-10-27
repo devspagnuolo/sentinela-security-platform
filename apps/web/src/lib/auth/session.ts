@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, lt, ne } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { memberships, sessions, users } from "@/db/schema";
+import { memberships, organizations, sessions, users } from "@/db/schema";
 import type { Role } from "./rbac";
 
 export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -9,7 +9,13 @@ export const SESSION_IDLE_MS = 2 * 60 * 60 * 1000;
 const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 
 export type SessionUser = { id: string; email: string; name: string };
-export type ActiveSession = { id: string; organizationId: string; role: Role; user: SessionUser; expiresAt: Date };
+export type ActiveSession = {
+  id: string; organizationId: string; role: Role; user: SessionUser; expiresAt: Date;
+  /** Usuário tem MFA ativo. */
+  mfaEnabled: boolean;
+  /** A organização exige MFA e o usuário ainda não cadastrou: só pode acessar a própria conta. */
+  mfaEnrollmentRequired: boolean;
+};
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
@@ -25,17 +31,18 @@ export async function validateSession(db: Database, token: string | undefined, n
   if (!token || token.length > 128) return null;
   const id = hashToken(token);
   const [row] = await db
-    .select({ session: sessions, user: users, role: memberships.role })
+    .select({ session: sessions, user: users, role: memberships.role, requireMfa: organizations.requireMfa })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
     .innerJoin(memberships, and(eq(memberships.userId, sessions.userId), eq(memberships.organizationId, sessions.organizationId)))
+    .innerJoin(organizations, eq(organizations.id, sessions.organizationId))
     .where(and(eq(sessions.id, id), gt(sessions.expiresAt, now)));
   if (!row || row.user.disabled || now.getTime() - row.session.lastSeenAt.getTime() > SESSION_IDLE_MS) {
     if (row) await db.delete(sessions).where(eq(sessions.id, id));
     return null;
   }
   if (now.getTime() - row.session.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) await db.update(sessions).set({ lastSeenAt: now }).where(eq(sessions.id, id));
-  return { id, organizationId: row.session.organizationId, role: row.role, user: { id: row.user.id, email: row.user.email, name: row.user.name }, expiresAt: row.session.expiresAt };
+  return { id, organizationId: row.session.organizationId, role: row.role, user: { id: row.user.id, email: row.user.email, name: row.user.name }, expiresAt: row.session.expiresAt, mfaEnabled: Boolean(row.user.totpEnabledAt), mfaEnrollmentRequired: row.requireMfa && !row.user.totpEnabledAt };
 }
 
 export async function revokeSession(db: Database, token: string | undefined) {
