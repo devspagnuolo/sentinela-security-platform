@@ -30,12 +30,12 @@ export async function seedDemo(db: Database, options: { ownerPassword?: string }
       createdBy: ownerId, approvedBy: ownerId, approvedAt: now
     }).returning();
     const [portal, api] = await tx.insert(assets).values([
-      { organizationId: org.id, authorizationId: scope.id, name: "Portal institucional", url: "https://portal.example.com", kind: "Web application", owner: "Equipe Digital", authorizationRef: scope.reference },
+      { organizationId: org.id, authorizationId: scope.id, name: "Portal institucional", url: "https://portal.example.com", kind: "Web application", owner: "Equipe Digital", authorizationRef: scope.reference, scheduleIntervalDays: 7, nextAssessmentAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) },
       { organizationId: org.id, authorizationId: scope.id, name: "API de serviços", url: "https://api.example.com", kind: "API", owner: "Plataforma", authorizationRef: scope.reference }
     ]).returning();
     const [runPortal, runApi] = await tx.insert(assessments).values([
-      { organizationId: org.id, assetId: portal.id, status: "completed", method: "SENTINELA-HTTP-001", finishedAt: now },
-      { organizationId: org.id, assetId: api.id, status: "completed", method: "SENTINELA-HTTP-001", finishedAt: now }
+      { organizationId: org.id, assetId: portal.id, status: "completed", method: "SENTINELA-HTTP-001", attempts: 1, startedAt: now, finishedAt: now, summary: { observed: 2, created: 2, reopened: 0, resolved: 0 } },
+      { organizationId: org.id, assetId: api.id, status: "completed", method: "SENTINELA-HTTP-001", attempts: 1, startedAt: now, finishedAt: now, summary: { observed: 1, created: 1, reopened: 0, resolved: 0 } }
     ]).returning();
     const demo = [
       { assetId: portal.id, assessmentId: runPortal.id, title: "Política de segurança de conteúdo ausente", severity: "medium" as const, category: "HTTP Headers", description: "A resposta observada não incluiu Content-Security-Policy.", evidence: "Header ausente na resposta da raiz", recommendation: "Defina uma política CSP adequada ao inventário de recursos e monitore violações antes de aplicar bloqueio estrito.", references: ["OWASP Secure Headers"] },

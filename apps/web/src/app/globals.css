@@ -74,3 +74,14 @@ a.all-findings{text-decoration:none}
 .finding-detail h3{margin:6px 0 0;font-size:14px}
 .history{margin:0;padding-left:18px;font-size:13px;color:#3d5148;display:flex;flex-direction:column;gap:4px}
 .findings-table .severity-tag{font-size:12px;padding:3px 8px}
+.run-queued,.run-running{background:#eef1f8;color:#4f5f8a}
+.run-completed{background:#e7f6ee;color:#1d7a52}
+.run-failed{background:#fdecec;color:#9b2c2c}
+.notification-list{list-style:none;padding:0;margin:0;width:100%;display:flex;flex-direction:column;gap:8px}
+.notification-list li{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;background:#fff;border:1px solid #e3ece6;border-radius:10px;padding:12px 14px;font-size:14px}
+.notification-list li.unread{border-left:4px solid #168365}
+.notification-list li p{margin:4px 0}
+.notification-list li .row-actions{flex:none}
+.bell-count{position:absolute;top:-2px;right:-4px;min-width:15px;height:15px;border-radius:8px;background:#eb7356;color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;padding:0 3px}
+.schedule-select{height:25px;border:1px solid #e5eee9;border-radius:5px;background:#fff;color:#4c5c53;font:8px 'DM Sans';padding:0 3px}
+.last-scan.failed{color:#b4473c}

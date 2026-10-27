@@ -99,3 +99,9 @@ export const findingStatusSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("accepted"), reason: z.string().trim().min(5, "Registre a justificativa do aceite de risco.").max(1000), acceptedUntil: day })
 ], { error: "Situação inválida." }).transform(v => v.status === "accepted" ? { ...v, acceptedUntil: new Date(`${v.acceptedUntil}T23:59:59.999-03:00`) } : v)
   .refine(v => v.status !== "accepted" || (v.acceptedUntil > new Date() && v.acceptedUntil.getTime() - Date.now() <= 1000 * 60 * 60 * 24 * 366), "O aceite de risco precisa vencer entre amanhã e 1 ano.");
+
+/** 0 desliga a reavaliação periódica; os demais valores são dias entre execuções. */
+export const scheduleSchema = z.object({
+  intervalDays: z.union([z.literal(0), z.literal(1), z.literal(7), z.literal(30)], { error: "Escolha manual, diária, semanal ou mensal." })
+});
+export const markReadSchema = z.object({ ids: z.array(z.string()).max(200).optional() });

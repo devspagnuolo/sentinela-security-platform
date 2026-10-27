@@ -66,6 +66,12 @@ Abra http://localhost:3000 e entre com `admin@sentinela.local` / `sentinela-demo
 
 Cada problema vira um único achado por ativo, identificado por categoria e título. Reavaliações atualizam a evidência, marcam como **corrigido** o que deixou de aparecer e reabrem o que voltou. Na tela **Achados**, Analistas marcam falso positivo (com justificativa) ou corrigido. Admins e Owners podem **aceitar o risco** com justificativa e prazo de até um ano; vencido o prazo, o achado volta a aberto. Toda mudança fica no histórico do achado e na auditoria. Relatórios mostram a situação e a justificativa de cada achado.
 
+## Avaliações em segundo plano e notificações
+
+Ao clicar em **Avaliar**, a avaliação entra numa fila no próprio PostgreSQL e um worker dentro da aplicação a executa em segundo plano. O escopo é conferido de novo na hora da execução, então uma autorização revogada ou vencida no meio do caminho bloqueia a avaliação. Falhas de rede são repetidas até 3 vezes com espera crescente. Cada ativo pode ter **reavaliação** diária, semanal ou mensal, e o andamento fica em **Histórico de análises**.
+
+O sino do painel leva às **Notificações**. São avisos de achados altos ou críticos novos ou reabertos, avaliações não concluídas, escopos aguardando aprovação ou vencendo em até 14 dias e aceites de risco vencidos. Cada aviso vai para os papéis que podem agir sobre ele. `SENTINELA_WORKER=0` desliga o worker de um processo, e `SENTINELA_WORKER_CONCURRENCY` (padrão 2) limita as execuções simultâneas. Várias instâncias podem rodar o worker ao mesmo tempo, porque cada job é pego com `FOR UPDATE SKIP LOCKED`.
+
 ## Produção
 
 A imagem Docker (`Dockerfile`, compatível com x86 e ARM) e o compose de produção (`deploy/`) sobem PostgreSQL, aplicação, Caddy com HTTPS automático e backup diário. O passo a passo para uma VM gratuita do Oracle Cloud está em [docs/deploy-oracle-cloud.md](docs/deploy-oracle-cloud.md). A aplicação expõe `/api/health` (com `?ready=1` também verifica o banco), escreve logs estruturados em JSON e mantém uma trilha de auditoria consultável em **Auditoria**, com exportação CSV.
@@ -74,9 +80,8 @@ A imagem Docker (`Dockerfile`, compatível com x86 e ARM) e o compose de produç
 
 O roadmap enterprise segue nesta ordem:
 
-1. Fila de avaliações em segundo plano, reavaliações agendadas e notificações.
-2. Verificações TLS e DNS, inventário passivo de tecnologias e conectores cloud read-only.
-3. Relatórios PDF/XLSX, API com tokens e webhooks, e controles de LGPD.
+1. Verificações TLS e DNS, inventário passivo de tecnologias e conectores cloud read-only.
+2. Relatórios PDF/XLSX, API com tokens e webhooks (incluindo notificações por e-mail e webhook), e controles de LGPD.
 
 ## Licença
 
