@@ -1,0 +1,11 @@
+{
+  "name": "sentinela-security-assessment",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "npm run dev --workspace @sentinela/web",
+    "build": "npm run build --workspace @sentinela/web",
+    "typecheck": "npm run typecheck --workspace @sentinela/web"
+  }
+}
