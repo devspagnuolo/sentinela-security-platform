@@ -13,7 +13,7 @@
     "test": "npm run test --workspace @sentinela/web"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "overrides": {
     "postcss": "^8.5.23"

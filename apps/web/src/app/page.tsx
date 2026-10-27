@@ -7,8 +7,9 @@ const sev: Record<Severity,{label:string;className:string}>={critical:{label:"Cr
 function score(findings:Finding[]){const penalty=findings.reduce((n,f)=>n+({critical:14,high:8,medium:4,low:1,info:0}[f.severity]),0);return Math.max(0,Math.min(100,91-penalty));}
 export default function Home(){
  const [assets,setAssets]=useState<Asset[]>([]),[findings,setFindings]=useState<Finding[]>([]),[query,setQuery]=useState(""),[modal,setModal]=useState(false),[busy,setBusy]=useState<string|null>(null),[notice,setNotice]=useState(""),[form,setForm]=useState({name:"",url:"",owner:"",kind:"Web application",authorizationRef:"",authorized:false});
- async function refresh(){const [a,f]=await Promise.all([fetch("/api/assets"),fetch("/api/findings")]);setAssets(await a.json());setFindings(await f.json());}
- useEffect(()=>{void refresh()},[]);
+ async function load():Promise<[Asset[],Finding[]]>{const [a,f]=await Promise.all([fetch("/api/assets"),fetch("/api/findings")]);return [await a.json(),await f.json()];}
+ async function refresh(){const [a,f]=await load();setAssets(a);setFindings(f);}
+ useEffect(()=>{let active=true;load().then(([a,f])=>{if(active){setAssets(a);setFindings(f);}});return()=>{active=false};},[]);
  const counts=useMemo(()=>({critical:findings.filter(x=>x.severity==="critical").length,high:findings.filter(x=>x.severity==="high").length,medium:findings.filter(x=>x.severity==="medium").length,low:findings.filter(x=>x.severity==="low").length}),[findings]);
  const filtered=assets.filter(a=>`${a.name} ${a.url} ${a.owner}`.toLowerCase().includes(query.toLowerCase()));
  async function addAsset(e:React.FormEvent){e.preventDefault();const r=await fetch("/api/assets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});const data=await r.json();if(!r.ok){setNotice(data.error);return}setNotice("Ativo cadastrado. A avaliação exige autorização formal e hostname na lista do operador.");setModal(false);setForm({name:"",url:"",owner:"",kind:"Web application",authorizationRef:"",authorized:false});await refresh();}
