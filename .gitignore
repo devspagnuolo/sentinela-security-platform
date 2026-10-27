@@ -8,3 +8,4 @@ coverage
 *.log
 *.tsbuildinfo
 next-env.d.ts
+.data

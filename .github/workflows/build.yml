@@ -16,6 +16,17 @@ jobs:
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sentinela
+          POSTGRES_USER: sentinela
+          POSTGRES_PASSWORD: sentinela_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sentinela -d sentinela"
+          --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,5 +37,11 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - name: Apply migrations to a real PostgreSQL
+        run: npm run db:migrate --workspace @sentinela/web && npm run db:seed --workspace @sentinela/web
+        env:
+          DATABASE_URL: postgres://sentinela:sentinela_ci@localhost:5432/sentinela
+      - name: Check schema and migrations are in sync
+        run: npx --workspace @sentinela/web drizzle-kit check
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high

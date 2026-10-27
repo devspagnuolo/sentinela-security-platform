@@ -8,8 +8,7 @@ vi.mock("@/lib/scanner", () => ({
   })
 }));
 
-const { POST } = await import("./route");
-const { store } = await import("@/lib/store");
+const { GET, POST } = await import("./route");
 
 const post = (body: unknown) => POST(new Request("http://localhost/api/assets", { method: "POST", headers: { "Content-Type": "application/json" }, body: typeof body === "string" ? body : JSON.stringify(body) }));
 
@@ -23,7 +22,7 @@ describe("POST /api/assets", () => {
     expect(res.status).toBe(201);
     const asset = await res.json();
     expect(asset).toMatchObject({ url: "https://app.example.com", name: "app.example.com", approved: true });
-    expect(store.assets[0].id).toBe(asset.id);
+    expect((await (await GET()).json())[0].id).toBe(asset.id);
   });
 
   it("não aprova quando o scanner está desabilitado", async () => {
@@ -39,5 +38,13 @@ describe("POST /api/assets", () => {
     expect((await noAuth.json()).error).toContain("autorização");
     const internal = await post({ url: "https://db.internal", authorized: true, authorizationRef: "AUT-2026-01" });
     expect(internal.status).toBe(400);
+  });
+
+  it("registra o cadastro na trilha de auditoria", async () => {
+    const res = await post({ url: "https://audit.example.com", authorized: true, authorizationRef: "AUT-2026-02" });
+    const asset = await res.json();
+    const { requestRepository } = await import("@/lib/tenant");
+    const [entry] = await (await requestRepository()).listAudit(1);
+    expect(entry).toMatchObject({ action: "asset.created", targetType: "asset", targetId: asset.id });
   });
 });

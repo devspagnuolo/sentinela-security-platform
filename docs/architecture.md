@@ -6,7 +6,7 @@ Sentinela é uma estação de trabalho privada para um consultor de segurança. 
 
 ## Estado implementado
 
-A interface Next.js e suas rotas API usam memória do processo para demonstração. O scanner faz uma requisição HTTPS GET para a URL raiz, sem redirecionamento, com timeout de 5 segundos, conectando ao endereço IP validado (DNS fixado) e lendo somente status e cabeçalhos. Verifica alguns cabeçalhos defensivos, política CORS observada, atributos de cookies e banner Server. O corpo da resposta não é persistido. O relatório por ativo apresenta método, evidências mínimas, limitações e recomendações em JSON ou HTML imprimível.
+As rotas API persistem em PostgreSQL via Drizzle ORM (`apps/web/src/db`). O esquema já é multi-tenant: `organizations`, `users`, `memberships` (papéis owner, admin, analyst, viewer), `clients`, `authorizations`, `assets`, `assessments`, `findings` e `audit_log`, todas as tabelas de negócio com `organization_id`. O acesso a dados passa apenas por `tenantRepository(db, organizationId)`, que filtra toda consulta e escrita pela organização; testes verificam que uma organização não lê nem altera dados de outra. Até a fase de login, a organização da requisição é a definida em `SENTINELA_DEFAULT_ORG`. A trilha de auditoria é somente de inserção. O scanner faz uma requisição HTTPS GET para a URL raiz, sem redirecionamento, com timeout de 5 segundos, conectando ao endereço IP validado (DNS fixado) e lendo somente status e cabeçalhos. Verifica alguns cabeçalhos defensivos, política CORS observada, atributos de cookies e banner Server. O corpo da resposta não é persistido. O relatório por ativo apresenta método, evidências mínimas, limitações e recomendações em JSON ou HTML imprimível.
 
 ## Fluxo de dados proposto
 
@@ -30,4 +30,4 @@ A ausência de cabeçalho ou um banner é um indicador de configuração, não p
 
 ## Limites atuais
 
-Sem autenticação, persistência, aprovação com validade, varredura TLS, descoberta ampla, testes autenticados, cloud, PDF gerado no servidor ou IA. O protótipo não deve receber dados reais de clientes nem ser exposto publicamente até que os controles essenciais estejam implementados.
+Sem autenticação, aprovação com validade aplicada pelo scanner, varredura TLS, descoberta ampla, testes autenticados, cloud, PDF gerado no servidor ou IA. O protótipo não deve receber dados reais de clientes nem ser exposto publicamente até que os controles essenciais estejam implementados.

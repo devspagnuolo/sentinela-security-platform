@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { store } from "@/lib/store";
+import { requestRepository } from "@/lib/tenant";
 export const runtime = "nodejs";
 
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"\u0027]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\u0022": "&quot;", "\u0027": "&#39;" } as Record<string, string>)[char] ?? char);
@@ -7,11 +7,12 @@ const method = { id: "SENTINELA-HTTP-001", name: "Inspeção não intrusiva de m
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const asset = store.assets.find(item => item.id === id);
+  const repo = await requestRepository();
+  const asset = await repo.getAsset(id);
   if (!asset) return NextResponse.json({ error: "Ativo não encontrado." }, { status: 404 });
-  const run = store.assessments.find(item => item.assetId === id && item.status === "completed");
-  if (!run) return NextResponse.json({ error: "Nenhuma avaliação concluída para este ativo." }, { status: 404 });
-  const findings = store.findings.filter(item => run.findingIds.includes(item.id));
+  const latest = await repo.latestCompletedAssessment(id);
+  if (!latest) return NextResponse.json({ error: "Nenhuma avaliação concluída para este ativo." }, { status: 404 });
+  const { run, findings } = latest;
   const report = {
     version: "0.2", generatedAt: new Date().toISOString(), classification: "Rascunho para revisão do avaliador",
     demonstration: asset.authorizationRef.startsWith("DEMO-"),
@@ -23,6 +24,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     findings: findings.map(item => ({ id: item.id, title: item.title, severity: item.severity, category: item.category, observation: item.description, evidence: item.evidence, potentialRisk: "O impacto depende do contexto da aplicação e deve ser validado pelo avaliador.", recommendation: item.recommendation, references: item.references, discoveredAt: item.discoveredAt }))
   };
   const format = new URL(request.url).searchParams.get("format") ?? "json";
+  if (format === "json" || format === "html") await repo.audit("report.generated", "asset", asset.id, { assessmentId: run.id, format });
   if (format === "json") return NextResponse.json(report, { headers: { "Cache-Control": "no-store", "Content-Disposition": "attachment; filename=sentinela-report-" + id.replace(/[^a-zA-Z0-9-]/g, "") + ".json" } });
   if (format !== "html") return NextResponse.json({ error: "Formato aceito: json ou html." }, { status: 400 });
   const findingHtml = report.findings.map(item => "<article><h3>" + escapeHtml(item.title) + " <small>" + escapeHtml(item.severity) + "</small></h3><p><b>Observação:</b> " + escapeHtml(item.observation) + "</p><p><b>Evidência:</b> " + escapeHtml(item.evidence) + "</p><p><b>Risco potencial:</b> " + escapeHtml(item.potentialRisk) + "</p><p><b>Recomendação:</b> " + escapeHtml(item.recommendation) + "</p><p><b>Referências:</b> " + escapeHtml(item.references.join(", ")) + "</p></article>").join("");

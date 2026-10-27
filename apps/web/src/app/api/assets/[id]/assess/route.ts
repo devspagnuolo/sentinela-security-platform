@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
-import { store } from "@/lib/store";
-import { assess } from "@/lib/scanner";
-import { randomUUID } from "node:crypto";
+import { assess, SCANNER_METHOD_ID } from "@/lib/scanner";
+import { requestRepository } from "@/lib/tenant";
 export const runtime = "nodejs";
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const asset = store.assets.find(item => item.id === id);
+  const repo = await requestRepository();
+  const asset = await repo.getAsset(id);
   if (!asset) return NextResponse.json({ error: "Ativo não encontrado." }, { status: 404 });
   if (!asset.approved) return NextResponse.json({ error: "O ativo precisa ser aprovado no fluxo de autorização antes da avaliação." }, { status: 403 });
-  try {
-    const startedAt = new Date().toISOString();
-    const findings = await assess(asset);
-    store.findings.unshift(...findings);
-    const run = { id: randomUUID(), assetId: asset.id, status: "completed" as const, startedAt, findingIds: findings.map(item => item.id) };
-    store.assessments.unshift(run);
-    return NextResponse.json({ run, findings });
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Falha na avaliação." }, { status: 400 }); }
+  const startedAt = new Date();
+  let observed;
+  try { observed = await assess(asset); } catch (error) {
+    const message = error instanceof Error ? error.message : "Falha na avaliação.";
+    await repo.audit("assessment.failed", "asset", asset.id, { error: message });
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+  const { run, findings } = await repo.recordAssessment(asset.id, SCANNER_METHOD_ID, startedAt, observed.map(({ title, severity, category, description, evidence, recommendation, references }) => ({ title, severity, category, description, evidence, recommendation, references })));
+  return NextResponse.json({ run, findings });
 }
