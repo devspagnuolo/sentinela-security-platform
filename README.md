@@ -76,6 +76,8 @@ O sino do painel leva às **Notificações**. São avisos de achados altos ou cr
 
 Integrações autenticam com **tokens de API** pessoais, criados em **Minha conta**. Cada token tem papel Leitor ou Analista e validade de até um ano, e só acessa as rotas de negócio (ativos, avaliações, escopos, achados, relatórios e exportação). Em **Integrações**, Admins e Owners cadastram **webhooks** assinados com HMAC-SHA256 para avaliações concluídas ou com falha, triagem de achados, aceites vencidos e mudanças de escopo. Cada entrega tem novas tentativas com espera crescente, e o webhook é desligado depois de falhas seguidas. Rotas, eventos, formato e exemplos de validação da assinatura estão em [docs/api.md](docs/api.md).
 
+Com SMTP configurado (`SENTINELA_SMTP_URL` e `SENTINELA_MAIL_FROM`), os avisos do sino também chegam por e-mail. Cada pessoa pode desligar os e-mails em **Minha conta**, e Admins enviam um e-mail de teste em **Integrações**. Sem essa configuração, os avisos ficam só na aplicação.
+
 ## Produção
 
 A imagem Docker (`Dockerfile`, compatível com x86 e ARM) e o compose de produção (`deploy/`) sobem PostgreSQL, aplicação, Caddy com HTTPS automático e backup diário. O passo a passo para uma VM gratuita do Oracle Cloud está em [docs/deploy-oracle-cloud.md](docs/deploy-oracle-cloud.md). A aplicação expõe `/api/health` (com `?ready=1` também verifica o banco), escreve logs estruturados em JSON e mantém uma trilha de auditoria consultável em **Auditoria**, com exportação CSV.
@@ -84,9 +86,8 @@ A imagem Docker (`Dockerfile`, compatível com x86 e ARM) e o compose de produç
 
 O roadmap enterprise segue nesta ordem:
 
-1. Notificações por e-mail.
-2. Controles de LGPD (retenção, exportação e exclusão de dados).
-3. Inventário passivo de tecnologias e conectores cloud read-only.
+1. Controles de LGPD (retenção, exportação e exclusão de dados).
+2. Inventário passivo de tecnologias e conectores cloud read-only.
 
 ## Licença
 

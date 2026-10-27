@@ -41,6 +41,8 @@ export const users = pgTable("users", {
   totpPendingSecret: text("totp_pending_secret"),
   totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true }),
   totpLastStep: bigint("totp_last_step", { mode: "number" }),
+  // Recebe por e-mail os avisos da caixa de notificações (quando o SMTP está configurado).
+  emailNotifications: boolean("email_notifications").notNull().default(true),
   ...timestamps
 }, t => [uniqueIndex("users_email_lower_idx").on(sql`lower(${t.email})`)]);
 
@@ -273,8 +275,17 @@ export const notifications = pgTable("notifications", {
   body: text("body").notNull().default(""),
   link: text("link"),
   readAt: timestamp("read_at", { withTimezone: true }),
+  // Cópia por e-mail: null = não enviar; pending → sent | failed | skipped. O worker envia com FOR UPDATE SKIP LOCKED.
+  emailStatus: text("email_status"),
+  emailAttempts: integer("email_attempts").notNull().default(0),
+  emailNextAttemptAt: timestamp("email_next_attempt_at", { withTimezone: true }),
+  emailLockedAt: timestamp("email_locked_at", { withTimezone: true }),
+  emailError: text("email_error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
-}, t => [index("notifications_user_idx").on(t.organizationId, t.userId, t.createdAt)]);
+}, t => [
+  index("notifications_user_idx").on(t.organizationId, t.userId, t.createdAt),
+  index("notifications_email_queue_idx").on(t.emailNextAttemptAt).where(sql`${t.emailStatus} = 'pending'`)
+]);
 
 // Token de API pessoal: age como o usuário, com papel limitado (Leitor ou Analista). O token nunca é gravado, só o SHA-256.
 export const apiTokens = pgTable("api_tokens", {

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import ApiTokens from "./api-tokens";
 import SsoSettings from "./sso-settings";
 import type { Role } from "@/lib/auth/rbac";
-import { ArrowLeft, Download, KeyRound, LogOut, ShieldCheck, ShieldOff } from "lucide-react";
+import { ArrowLeft, Download, KeyRound, LogOut, Mail, ShieldCheck, ShieldOff } from "lucide-react";
 
 type Props = {
   user: { id: string; email: string; name: string };
@@ -13,6 +13,7 @@ type Props = {
   canManageOrg: boolean; orgRequiresMfa: boolean; hasPassword: boolean; signedInWithSso: boolean;
   /** Papéis que esta pessoa pode dar a um token de API. */
   tokenRoles: Role[];
+  emailNotifications: boolean; mailConfigured: boolean;
 };
 type Setup = { secret: string; uri: string; qrSvg: string };
 
@@ -71,6 +72,11 @@ export default function AccountSettings(props: Props) {
       if (r.ok) setPasswords({ currentPassword: "", newPassword: "", repeat: "" });
     });
   };
+  const toggleEmail = () => run(async () => {
+    const r = await post("/api/auth/preferences", { emailNotifications: !props.emailNotifications }, "PUT");
+    setNotice(r.ok ? (props.emailNotifications ? "Você não receberá mais os avisos por e-mail." : "Os avisos também chegarão por e-mail.") : r.data.error ?? "Falha na operação.");
+    if (r.ok) router.refresh();
+  });
   const toggleOrgMfa = () => run(async () => {
     const r = await post("/api/organization", { requireMfa: !props.orgRequiresMfa }, "PATCH");
     setNotice(r.ok ? (props.orgRequiresMfa ? "A organização não exige mais verificação em duas etapas." : "Verificação em duas etapas agora é obrigatória para todos os usuários.") : r.data.error ?? "Falha na operação.");
@@ -124,6 +130,13 @@ export default function AccountSettings(props: Props) {
         <button className="button button-primary" disabled={busy} onClick={() => void startSetup()}><ShieldCheck size={15}/>Configurar</button>
       </>}
     </section>
+
+    {!props.mfaEnrollmentRequired && <section className="account-card">
+      <h2><Mail size={18}/>Avisos por e-mail</h2>
+      <p>{props.emailNotifications ? `Os avisos do sino (achados urgentes, avaliações com falha, escopos e aceites de risco) também chegam em ${props.user.email}.` : "Os avisos ficam só no sino da aplicação."}</p>
+      {!props.mailConfigured && <p className="hint">O servidor ainda não tem envio de e-mail configurado; até lá, os avisos ficam só no sino.</p>}
+      <button className="button button-secondary" disabled={busy} onClick={() => void toggleEmail()}>{props.emailNotifications ? "Desativar e-mails" : "Receber por e-mail"}</button>
+    </section>}
 
     {!props.mfaEnrollmentRequired && <ApiTokens roles={props.tokenRoles} />}
 

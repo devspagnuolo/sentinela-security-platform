@@ -1,10 +1,11 @@
 import { and, asc, eq, gt, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { notify, pruneNotifications } from "@/db/notifications";
+import { notify, pruneNotifications, sendPendingEmails } from "@/db/notifications";
 import { scopeEvent, tenantRepository } from "@/db/repository";
 import { drainDeliveries, emitEvent, pruneDeliveries } from "@/db/webhooks";
 import { assessments, assets, authorizations, findings } from "@/db/schema";
 import { logger } from "./logger";
+import { mailSettings } from "./mail";
 import { assess as runScanner, SCANNER_METHOD_ID, TransientAssessmentError } from "./scanner";
 import type { Asset } from "./types";
 
@@ -151,6 +152,7 @@ export function startWorker(getDb: () => Promise<Database>, settings = workerSet
       await drainQueue(db, {}, settings.concurrency);
       // Webhooks por último: inclui os eventos que as avaliações deste ciclo acabaram de gerar.
       await drainDeliveries(db);
+      if (mailSettings().enabled) await sendPendingEmails(db);
     } catch (error) {
       logger.error("assessment.worker_tick_failed", { error });
     } finally {

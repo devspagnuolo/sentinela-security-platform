@@ -140,3 +140,20 @@ def is_from_sentinela(secret: str, raw_body: bytes, header: str, tolerance: int 
 ### Destinos permitidos
 
 A URL precisa ser HTTPS, com certificado válido e sem usuário e senha. O DNS é resolvido uma vez por envio, e a conexão vai ao endereço validado. Por padrão, só endereços públicos são aceitos, o que impede que um webhook seja usado para alcançar serviços internos da rede do servidor (SSRF). Se você precisa entregar a um coletor na rede interna, o operador pode liberar com `SENTINELA_WEBHOOK_ALLOW_PRIVATE=1`.
+
+## Avisos por e-mail
+
+Os avisos do sino também podem ser enviados por e-mail, por SMTP. Isso vale para achados altos ou críticos novos ou reabertos, avaliações não concluídas, escopos pendentes ou vencendo, aceites de risco vencidos e webhooks desligados. O operador configura no servidor:
+
+```sh
+SENTINELA_SMTP_URL=smtps://usuario:senha@smtp.provedor.com:465   # ou smtp://…:587, com STARTTLS obrigatório
+SENTINELA_MAIL_FROM="Sentinela <alertas@suaempresa.com.br>"
+```
+
+Codifique caracteres especiais do usuário e da senha na URL (ex.: `@` vira `%40`). Sem essas variáveis, nada é enviado. Com `smtp://`, o servidor precisa aceitar STARTTLS; para um relay local sem TLS, use `SENTINELA_SMTP_ALLOW_PLAIN=1`.
+
+- Cada pessoa liga ou desliga os e-mails em **Minha conta**. Por padrão, recebe.
+- Os e-mails entram numa fila e são enviados pelo worker. Se o envio falhar, há novas tentativas depois de 1, 10 e 60 minutos.
+- Se a pessoa desativar a preferência ou for desativada antes do envio, o e-mail não sai.
+- Em **Integrações**, Admins e Owners veem o remetente e o servidor configurados (sem a senha) e podem mandar um e-mail de teste para si.
+

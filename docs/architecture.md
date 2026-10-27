@@ -69,3 +69,7 @@ Ao executar, o worker carrega o ativo e avalia o escopo de novo. Se o escopo nã
 
 Uma falha agenda nova tentativa (1 min, 5 min, 30 min, 2 h e 12 h). Esgotadas as tentativas, a entrega falha. Depois de 5 entregas perdidas seguidas, o webhook é desligado, com auditoria e aviso à gestão. Entregas encerradas são apagadas depois de 30 dias. Destinos em rede privada são recusados, salvo com `SENTINELA_WEBHOOK_ALLOW_PRIVATE=1`.
 
+## Avisos por e-mail
+
+Com `SENTINELA_SMTP_URL` e `SENTINELA_MAIL_FROM` definidos, `notify` grava cada aviso com `email_status = 'pending'` para quem tem `users.email_notifications` ligado. O próprio aviso funciona como fila. A cada ciclo, depois dos webhooks, o worker pega pendentes com `FOR UPDATE SKIP LOCKED` (`claimEmail`) e confere de novo se a pessoa está ativa e quer o e-mail; se não estiver ou não quiser, o status vira `skipped`. Depois disso, envia pelo nodemailer (`src/lib/mail.ts`). Falhas são repetidas após 1, 10 e 60 minutos e, depois, ficam como `failed` com o erro. Assunto e corpo vêm do aviso. O assunto é forçado a uma linha, o que impede injetar cabeçalhos, e o HTML é escapado, porque títulos de achados podem conter texto vindo do alvo.
+

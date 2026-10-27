@@ -1,5 +1,5 @@
 /** Categorias de evento de auditoria (prefixo da ação) e rótulos para a interface. */
-export const AUDIT_CATEGORIES = { auth: "Acesso", user: "Usuários", sso: "SSO", organization: "Organização", scope: "Escopos", asset: "Ativos", assessment: "Avaliações", finding: "Achados", report: "Relatórios", export: "Exportações", token: "Tokens de API", webhook: "Webhooks" } as const;
+export const AUDIT_CATEGORIES = { auth: "Acesso", user: "Usuários", sso: "SSO", organization: "Organização", scope: "Escopos", asset: "Ativos", assessment: "Avaliações", finding: "Achados", report: "Relatórios", export: "Exportações", token: "Tokens de API", webhook: "Webhooks", email: "E-mail" } as const;
 export type AuditCategory = keyof typeof AUDIT_CATEGORIES;
 export const isAuditCategory = (value: string): value is AuditCategory => Object.hasOwn(AUDIT_CATEGORIES, value);
 
@@ -44,6 +44,8 @@ const ACTION_LABELS: Record<string, string> = {
   "webhook.deleted": "Webhook removido",
   "webhook.secret_rotated": "Segredo do webhook trocado",
   "webhook.tested": "Webhook testado",
-  "webhook.disabled": "Webhook desligado por falhas"
+  "webhook.disabled": "Webhook desligado por falhas",
+  "user.preferences_updated": "Preferências alteradas",
+  "email.tested": "E-mail de teste enviado"
 };
 export const actionLabel = (action: string) => ACTION_LABELS[action] ?? action;
