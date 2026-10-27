@@ -1,0 +1,12 @@
+**/node_modules
+**/.next
+**/.data
+**/*.tsbuildinfo
+**/coverage
+.git
+.github
+.env
+.env.*
+!.env.example
+deploy/backups
+deploy/.env

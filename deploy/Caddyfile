@@ -1,0 +1,19 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$SENTINELA_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Opcional: restrinja o acesso a IPs conhecidos (escritório, VPN). Descomente e ajuste.
+	# @blocked not remote_ip 203.0.113.10/32 198.51.100.0/24
+	# respond @blocked "Acesso restrito" 403
+
+	# O Caddy substitui o X-Forwarded-For enviado pelo cliente pelo IP real da conexão.
+	reverse_proxy app:3000
+}

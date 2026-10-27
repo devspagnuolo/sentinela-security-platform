@@ -62,14 +62,17 @@ npm run build
 
 Abra http://localhost:3000 e entre com `admin@sentinela.local` / `sentinela-demo-2026` (somente no banco embutido de desenvolvimento). Os ativos novos só ficam aptos à avaliação quando o hostname consta na lista do operador e a autorização é confirmada no cadastro. Os dados e indicadores iniciais são apenas demonstrativos.
 
+## Produção
+
+A imagem Docker (`Dockerfile`, compatível com x86 e ARM) e o compose de produção (`deploy/`) sobem PostgreSQL, aplicação, Caddy com HTTPS automático e backup diário. O passo a passo para uma VM gratuita do Oracle Cloud está em [docs/deploy-oracle-cloud.md](docs/deploy-oracle-cloud.md). A aplicação expõe `/api/health` (com `?ready=1` também verifica o banco), escreve logs estruturados em JSON e mantém uma trilha de auditoria consultável em **Auditoria**, com exportação CSV.
+
 ## Próximos marcos
 
-O roadmap enterprise completo (multi-tenancy, RBAC, SSO, observabilidade e deploy) está em evolução; os marcos abaixo resumem a ordem.
+O roadmap enterprise segue nesta ordem:
 
-2. Auditoria de execução e autorizações com janela de validade no banco.
-3. Verificações TLS, inventário passivo de tecnologias e conectores cloud read-only.
-4. Relatórios PDF/XLSX, revisão de achados e histórico de reavaliações.
-5. Deploy privado e controle de acesso para uso individual.
+1. Autorizações de escopo com janela de validade no banco, fila de avaliações e ciclo de vida dos achados (aceito, corrigido, falso positivo).
+2. Verificações TLS e DNS, inventário passivo de tecnologias e conectores cloud read-only.
+3. Relatórios PDF/XLSX, API com tokens e webhooks, e controles de LGPD.
 
 ## Licença
 

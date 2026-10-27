@@ -45,3 +45,7 @@
 .checkbox{flex-direction:row!important;align-items:center;font-weight:500!important}
 .hint{font-size:12px;color:#5b6f66}
 .hint code{word-break:break-all}
+.audit-page select{padding:9px 11px;border:1px solid #cfdcd4;border-radius:8px;font:inherit}
+.table-scroll{width:100%;overflow-x:auto}
+.nowrap{white-space:nowrap}
+.audit-details{font-size:12px;color:#3d5148;word-break:break-word;max-width:420px}

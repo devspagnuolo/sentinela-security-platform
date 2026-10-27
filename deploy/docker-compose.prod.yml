@@ -1,0 +1,102 @@
+# Produção em uma única VM: Postgres + Sentinela + Caddy (HTTPS automático) + backup diário.
+# Uso (na pasta deploy/): cp .env.example .env, edite, e rode: docker compose -f docker-compose.prod.yml up -d --build
+name: sentinela
+
+x-app-env: &app-env
+  DATABASE_URL: postgres://sentinela:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}@postgres:5432/sentinela
+  SENTINELA_ENCRYPTION_KEY: ${SENTINELA_ENCRYPTION_KEY:?defina SENTINELA_ENCRYPTION_KEY}
+  SENTINELA_PUBLIC_ORIGIN: https://${SENTINELA_DOMAIN:?defina SENTINELA_DOMAIN}
+  SENTINELA_ENABLE_SCANNER: ${SENTINELA_ENABLE_SCANNER:-0}
+  SENTINELA_ALLOWED_HOSTS: ${SENTINELA_ALLOWED_HOSTS:-}
+  SENTINELA_LOG_LEVEL: ${SENTINELA_LOG_LEVEL:-info}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sentinela
+      POSTGRES_USER: sentinela
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinela -d sentinela"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Sem portas publicadas: o banco só é acessível pela rede interna do compose.
+
+  app:
+    build:
+      context: ..
+      target: runtime
+    image: sentinela:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      SENTINELA_AUTO_MIGRATE: "1"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SENTINELA_DOMAIN: ${SENTINELA_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: sentinela
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: sentinela
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - ./backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh", "loop"]
+
+  # Comandos administrativos (não sobe com "up"):
+  #   docker compose -f docker-compose.prod.yml run --rm tools npm run user:create-owner -- voce@empresa.com "Seu Nome"
+  tools:
+    build:
+      context: ..
+      target: tools
+    image: sentinela-tools:latest
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

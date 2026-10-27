@@ -18,3 +18,13 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  - package-ecosystem: docker
+    directories: [/, /deploy]
+    schedule:
+      interval: weekly
+    ignore:
+      # Mantém Node 22 LTS e PostgreSQL 16 até uma migração planejada.
+      - dependency-name: node
+        update-types: [version-update:semver-major]
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]

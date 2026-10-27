@@ -9,3 +9,5 @@ coverage
 *.tsbuildinfo
 next-env.d.ts
 .data
+deploy/.env
+deploy/backups
