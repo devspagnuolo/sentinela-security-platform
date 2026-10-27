@@ -6,13 +6,14 @@ export const ROLE_LABELS: Record<Role, string> = { owner: "Owner", admin: "Admin
 export type Permission =
   | "asset:read" | "asset:write" | "assessment:run" | "report:read" | "export:download"
   | "audit:read" | "user:read" | "user:manage" | "org:manage"
-  | "scope:write" | "scope:approve" | "finding:triage" | "finding:accept";
+  | "scope:write" | "scope:approve" | "finding:triage" | "finding:accept" | "integration:manage";
 
 const viewer: Permission[] = ["asset:read", "report:read"];
 // Analista cadastra escopos e faz a triagem técnica (falso positivo, corrigido, reabrir).
 const analyst: Permission[] = [...viewer, "asset:write", "assessment:run", "export:download", "scope:write", "finding:triage"];
 // Aprovar escopo e aceitar risco são decisões de gestão.
-const admin: Permission[] = [...analyst, "audit:read", "user:read", "user:manage", "scope:approve", "finding:accept"];
+// Webhooks enviam dados da organização para fora: decisão de gestão.
+const admin: Permission[] = [...analyst, "audit:read", "user:read", "user:manage", "scope:approve", "finding:accept", "integration:manage"];
 
 const grants: Record<Role, ReadonlySet<Permission>> = {
   viewer: new Set(viewer),
@@ -26,6 +27,9 @@ export function can(role: Role, permission: Permission): boolean {
 }
 
 const rank: Record<Role, number> = { viewer: 0, analyst: 1, admin: 2, owner: 3 };
+export const rankOf = (role: Role) => rank[role];
+/** O papel de menor permissão entre os dois. */
+export const lowerRole = (a: Role, b: Role): Role => rank[a] <= rank[b] ? a : b;
 
 /**
  * Quem pode atribuir (ou alterar) um papel: Owner gerencia todos;

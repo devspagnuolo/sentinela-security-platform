@@ -9,7 +9,8 @@ export const SESSION_IDLE_MS = 2 * 60 * 60 * 1000;
 const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 
 export type SessionUser = { id: string; email: string; name: string };
-export type AuthMethod = "password" | "mfa" | "sso";
+/** "token": requisição autenticada por token de API (src/lib/auth/tokens.ts), sem cookie. */
+export type AuthMethod = "password" | "mfa" | "sso" | "token";
 export type ActiveSession = {
   id: string; organizationId: string; role: Role; user: SessionUser; expiresAt: Date;
   /** Usuário tem MFA ativo. */

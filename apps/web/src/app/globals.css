@@ -85,3 +85,22 @@ a.all-findings{text-decoration:none}
 .bell-count{position:absolute;top:-2px;right:-4px;min-width:15px;height:15px;border-radius:8px;background:#eb7356;color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;padding:0 3px}
 .schedule-select{height:25px;border:1px solid #e5eee9;border-radius:5px;background:#fff;color:#4c5c53;font:8px 'DM Sans';padding:0 3px}
 .last-scan.failed{color:#b4473c}
+.token-once{width:100%;display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #f0d58c;background:#fffbea;border-radius:10px}
+.token-once code{display:block;padding:8px;background:#fff;border-radius:6px;word-break:break-all;font-size:13px}
+.account-card select,.integrations-page select{padding:9px 11px;border:1px solid #cfdcd4;border-radius:8px;font:inherit;background:#fff}
+.integrations-page{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:16px;align-items:stretch}
+.integrations-page>.button{align-self:flex-start}
+.integrations-page h1{margin:0}
+.integrations-page input[type=url],.integrations-page input:not([type]){padding:9px 11px;border:1px solid #cfdcd4;border-radius:8px;font:inherit}
+.webhook-form{display:flex;flex-direction:column;gap:12px;width:100%}
+.event-picker{border:1px solid #dce9e1;border-radius:10px;padding:10px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px}
+.event-picker legend{font-size:13px;font-weight:600;padding:0 4px}
+.event-picker label{flex-direction:row!important;align-items:center;gap:8px!important;font-weight:400!important;font-size:14px}
+.event-picker code{font-size:11px;color:#5b6f66}
+.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px}
+.pill-ok{background:#e3f4ea;color:#176b53}
+.pill-off{background:#f4e6e3;color:#9b3b2f}
+.integrations-page code{word-break:break-all}
+.table-scroll{width:100%;overflow-x:auto}
+.event-picker label{flex-wrap:wrap}
+@media (max-width:600px){.event-picker code{flex-basis:100%;padding-left:24px}}

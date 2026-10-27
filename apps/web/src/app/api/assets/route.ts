@@ -5,7 +5,7 @@ import { withAuth } from "@/lib/auth/http";
 import { createAssetSchema, parseJson } from "@/lib/validation";
 export const runtime = "nodejs";
 
-export const GET = withAuth("asset:read", async ({ repo }) => NextResponse.json(await repo.listAssets()));
+export const GET = withAuth("asset:read", async ({ repo }) => NextResponse.json(await repo.listAssets()), { apiToken: true });
 
 export const POST = withAuth("asset:write", async ({ repo }, request) => {
   const parsed = await parseJson(request, createAssetSchema);
@@ -20,4 +20,4 @@ export const POST = withAuth("asset:write", async ({ repo }, request) => {
     if (error instanceof RepositoryError) return NextResponse.json({ error: error.message }, { status: error.status });
     throw error;
   }
-});
+}, { apiToken: true });

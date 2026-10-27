@@ -13,4 +13,4 @@ export const PUT = withAuth("asset:write", async ({ repo }, request, { params }:
     if (error instanceof RepositoryError) return NextResponse.json({ error: error.message }, { status: error.status });
     throw error;
   }
-});
+}, { apiToken: true });

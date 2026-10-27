@@ -16,4 +16,4 @@ export const PATCH = withAuth("finding:triage", async ({ repo, role }, request, 
     if (error instanceof RepositoryError) return NextResponse.json({ error: error.message }, { status: error.status });
     throw error;
   }
-});
+}, { apiToken: true });

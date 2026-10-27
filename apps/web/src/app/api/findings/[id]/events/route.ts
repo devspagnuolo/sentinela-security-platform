@@ -6,4 +6,4 @@ export const GET = withAuth("asset:read", async ({ repo }, _request, { params }:
   const { id } = await params;
   if (!(await repo.getFinding(id))) return NextResponse.json({ error: "Achado não encontrado." }, { status: 404 });
   return NextResponse.json(await repo.listFindingEvents(id), { headers: { "Cache-Control": "no-store" } });
-});
+}, { apiToken: true });

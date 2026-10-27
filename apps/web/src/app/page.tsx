@@ -4,7 +4,7 @@ import Dashboard from "./dashboard";
 
 export const dynamic = "force-dynamic";
 
-const permissions: Permission[] = ["asset:read", "asset:write", "assessment:run", "report:read", "export:download", "audit:read", "user:read", "user:manage"];
+const permissions: Permission[] = ["asset:read", "asset:write", "assessment:run", "report:read", "export:download", "audit:read", "user:read", "user:manage", "integration:manage"];
 
 export default async function Home() {
   const session = await requireSession();

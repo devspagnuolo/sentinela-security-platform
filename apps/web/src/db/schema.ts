@@ -275,3 +275,60 @@ export const notifications = pgTable("notifications", {
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 }, t => [index("notifications_user_idx").on(t.organizationId, t.userId, t.createdAt)]);
+
+// Token de API pessoal: age como o usuário, com papel limitado (Leitor ou Analista). O token nunca é gravado, só o SHA-256.
+export const apiTokens = pgTable("api_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: orgRef(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  // Início do token (snt_xxxxxxxx) para identificá-lo na interface.
+  prefix: text("prefix").notNull(),
+  role: roleEnum("role").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  lastUsedIp: text("last_used_ip"),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, t => [uniqueIndex("api_tokens_hash_idx").on(t.tokenHash), index("api_tokens_org_user_idx").on(t.organizationId, t.userId)]);
+
+export const webhookDeliveryStatusEnum = pgEnum("webhook_delivery_status", ["pending", "delivered", "failed"]);
+
+// Destino de eventos da organização. O segredo de assinatura é cifrado (src/lib/crypto.ts).
+export const webhooks = pgTable("webhooks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: orgRef(),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  secret: text("secret").notNull(),
+  events: text("events").array().notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  // Entregas que esgotaram as tentativas em sequência; ao atingir o limite o webhook é desligado.
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  disabledReason: text("disabled_reason"),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps
+}, t => [index("webhooks_org_idx").on(t.organizationId)]);
+
+// Fila de entregas: uma linha por (evento, webhook). O worker envia com FOR UPDATE SKIP LOCKED, como na fila de avaliações.
+export const webhookDeliveries = pgTable("webhook_deliveries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: orgRef(),
+  webhookId: uuid("webhook_id").notNull().references(() => webhooks.id, { onDelete: "cascade" }),
+  // Mesmo id para todos os webhooks que recebem o evento; o destinatário usa para descartar duplicatas.
+  eventId: uuid("event_id").notNull(),
+  event: text("event").notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  status: webhookDeliveryStatusEnum("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  responseStatus: integer("response_status"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true })
+}, t => [
+  index("webhook_deliveries_queue_idx").on(t.nextAttemptAt).where(sql`${t.status} = 'pending'`),
+  index("webhook_deliveries_webhook_idx").on(t.webhookId, t.createdAt)
+]);

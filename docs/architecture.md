@@ -56,3 +56,16 @@ O worker (`src/lib/worker.ts`) é iniciado por `src/instrumentation.ts` em cada 
 Ao executar, o worker carrega o ativo e avalia o escopo de novo. Se o escopo não libera, registra `assessment.blocked` e falha sem contatar o alvo. Erros de rede (`TransientAssessmentError`) voltam à fila com espera de 1, 2 e 4 minutos; os demais erros falham na hora.
 
 `notifications` guarda um aviso por destinatário (`read_at` individual). `notify` escolhe os membros ativos por público. A operação (Owner, Admin e Analista) recebe achados altos ou críticos novos e reaberturas, e falhas de execuções agendadas. A gestão (Owner e Admin) recebe escopos pendentes (exceto quem cadastrou), escopos vencendo e aceites de risco vencidos. A falha de uma avaliação manual vai para quem a pediu.
+
+## Tokens de API e webhooks
+
+`api_tokens` guarda tokens pessoais: o SHA-256 do valor (`snt_` + 32 bytes aleatórios), um prefixo para exibição, o papel (`viewer` ou `analyst`), a validade, o último uso (data e IP) e a revogação. `withAuth` aceita `Authorization: Bearer` só nas rotas marcadas com `apiToken: true`. Nesse caso a checagem de mesma origem não se aplica, porque não há cookie e o navegador não envia `Authorization` para outra origem sem CORS, que não é habilitado. O papel efetivo é o menor entre o do token e o atual da pessoa. A sessão resultante tem `authMethod: "token"`, e o repositório inclui `via: "api_token"` e `apiTokenId` em toda linha de auditoria.
+
+`webhooks` guarda destino, eventos assinados (`text[]`), segredo cifrado com AES-256-GCM e um contador de entregas perdidas seguidas. `emitEvent` (`src/db/webhooks.ts`) grava uma linha em `webhook_deliveries` por webhook ativo que assina o evento, todas com o mesmo `event_id`. Assim, a avaliação, a triagem ou a mudança de escopo nunca espera a rede. A cada ciclo, depois das avaliações, o worker pega entregas vencidas com `FOR UPDATE SKIP LOCKED`, como na fila de avaliações, e envia um POST:
+
+- O POST é assinado (`Sentinela-Signature: t=…,v1=HMAC-SHA256(segredo, "t.corpo")`).
+- O DNS é resolvido uma única vez, o endereço é validado e fixado na conexão.
+- Redirecionamentos não são seguidos e o timeout é de 10 s.
+
+Uma falha agenda nova tentativa (1 min, 5 min, 30 min, 2 h e 12 h). Esgotadas as tentativas, a entrega falha. Depois de 5 entregas perdidas seguidas, o webhook é desligado, com auditoria e aviso à gestão. Entregas encerradas são apagadas depois de 30 dias. Destinos em rede privada são recusados, salvo com `SENTINELA_WEBHOOK_ALLOW_PRIVATE=1`.
+

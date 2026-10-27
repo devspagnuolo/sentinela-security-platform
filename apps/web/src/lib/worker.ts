@@ -1,7 +1,8 @@
 import { and, asc, eq, gt, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { notify, pruneNotifications } from "@/db/notifications";
-import { tenantRepository } from "@/db/repository";
+import { scopeEvent, tenantRepository } from "@/db/repository";
+import { drainDeliveries, emitEvent, pruneDeliveries } from "@/db/webhooks";
 import { assessments, assets, authorizations, findings } from "@/db/schema";
 import { logger } from "./logger";
 import { assess as runScanner, SCANNER_METHOD_ID, TransientAssessmentError } from "./scanner";
@@ -53,7 +54,7 @@ export async function scheduleDue(db: Database, now = new Date()) {
   return due.length;
 }
 
-/** Tarefas periódicas: aceites de risco vencidos, escopos perto do fim e limpeza de avisos lidos. */
+/** Tarefas periódicas: aceites de risco vencidos, escopos perto do fim e limpeza de avisos lidos e entregas antigas. */
 export async function housekeeping(db: Database, now = new Date()) {
   const orgs = await db.selectDistinct({ id: findings.organizationId }).from(findings).where(and(eq(findings.status, "accepted"), lt(findings.acceptedUntil, now)));
   for (const org of orgs) await tenantRepository(db, org.id).expireAcceptances(now);
@@ -61,15 +62,17 @@ export async function housekeeping(db: Database, now = new Date()) {
   const expiring = await db.update(authorizations).set({ expiryNotifiedAt: now })
     .where(and(eq(authorizations.status, "approved"), isNull(authorizations.expiryNotifiedAt), isNotNull(authorizations.validUntil),
       lte(authorizations.validUntil, new Date(now.getTime() + SCOPE_EXPIRY_WARNING_DAYS * DAY_MS)), gt(authorizations.validUntil, now)))
-    .returning({ organizationId: authorizations.organizationId, reference: authorizations.reference, validUntil: authorizations.validUntil });
+    .returning();
   for (const scope of expiring) {
     const days = Math.max(1, Math.ceil((scope.validUntil!.getTime() - now.getTime()) / DAY_MS));
     await notify(db, scope.organizationId, { audience: "managers" }, {
       kind: "scope.expiring", link: "/escopos", title: `Escopo ${scope.reference} vence em ${days} dia(s)`,
       body: "Depois do vencimento, os ativos vinculados não podem mais ser avaliados. Renove a autorização com o cliente se o trabalho continua."
     });
+    await emitEvent(db, scope.organizationId, "scope.expiring", { scope: scopeEvent({ ...scope, clientName: null, validFrom: scope.validFrom?.toISOString() ?? null, validUntil: scope.validUntil!.toISOString() }), daysLeft: days }, now);
   }
   await pruneNotifications(db, now);
+  await pruneDeliveries(db, now);
 }
 
 /** Executa um job já marcado como running: confere o escopo, roda o scanner e grava o resultado. */
@@ -146,6 +149,8 @@ export function startWorker(getDb: () => Promise<Database>, settings = workerSet
       await scheduleDue(db, now);
       if (now.getTime() - state.lastHousekeeping >= 60_000) { await housekeeping(db, now); state.lastHousekeeping = now.getTime(); }
       await drainQueue(db, {}, settings.concurrency);
+      // Webhooks por último: inclui os eventos que as avaliações deste ciclo acabaram de gerar.
+      await drainDeliveries(db);
     } catch (error) {
       logger.error("assessment.worker_tick_failed", { error });
     } finally {

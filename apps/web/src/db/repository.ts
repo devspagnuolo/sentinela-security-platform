@@ -4,6 +4,8 @@ import { evaluateScope, findingFingerprint, SCOPE_MESSAGES, scopeState } from "@
 import type { Asset, Assessment, AssessmentSummary, Authorization, Finding, FindingEvent, FindingStatus } from "@/lib/types";
 import type { Database } from "./client";
 import { notify } from "./notifications";
+import { emitEvent } from "./webhooks";
+import { appLink } from "@/lib/webhooks";
 import { assessmentFindings, assessments, assets, auditLog, authorizations, clients, findingEvents, findings, users } from "./schema";
 
 type NewAsset = { name: string; url: string; kind: Asset["kind"]; owner: string; authorizationId: string };
@@ -52,6 +54,10 @@ const toFinding = (row: typeof findings.$inferSelect, evidence?: string): Findin
   discoveredAt: row.discoveredAt.toISOString(), lastSeenAt: row.lastSeenAt.toISOString()
 });
 
+/** Dados de escopo enviados nos webhooks (sem contato de emergência nem observações internas). */
+export const scopeEvent = (a: Pick<Authorization, "id" | "reference" | "clientName" | "hostnames" | "excludedHostnames" | "validFrom" | "validUntil" | "status">) =>
+  ({ id: a.id, reference: a.reference, clientName: a.clientName, hostnames: a.hostnames, excludedHostnames: a.excludedHostnames, validFrom: a.validFrom, validUntil: a.validUntil, status: a.status, link: appLink("/escopos") });
+
 export class RepositoryError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
@@ -61,7 +67,8 @@ export class RepositoryError extends Error {
  * organização e todas as consultas e escritas filtram por organization_id,
  * de modo que um tenant nunca lê nem altera registros de outro.
  */
-export function tenantRepository(db: Database, organizationId: string, actorUserId: string | null = null) {
+/** `apiTokenId`: a ação veio de um token de API; a auditoria registra qual. */
+export function tenantRepository(db: Database, organizationId: string, actorUserId: string | null = null, context: { apiTokenId?: string } = {}) {
   const own = (table: { organizationId: Column }) => eq(table.organizationId, organizationId);
 
   async function findingIdsFor(runIds: string[]) {
@@ -75,7 +82,7 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
   /** Aceites de risco vencidos voltam a "open" (com evento no histórico). */
   async function expireAcceptances(now = new Date()) {
     const expired = await db.update(findings).set({ status: "open", statusReason: "Prazo do aceite de risco venceu.", statusChangedAt: now, statusChangedBy: null, acceptedUntil: null })
-      .where(and(own(findings), eq(findings.status, "accepted"), lt(findings.acceptedUntil, now))).returning({ id: findings.id });
+      .where(and(own(findings), eq(findings.status, "accepted"), lt(findings.acceptedUntil, now))).returning({ id: findings.id, title: findings.title, severity: findings.severity, assetId: findings.assetId });
     if (!expired.length) return 0;
     await db.insert(findingEvents).values(expired.map(f => ({ organizationId, findingId: f.id, fromStatus: "accepted" as const, toStatus: "open" as const, reason: "Prazo do aceite de risco venceu." })));
     await notify(db, organizationId, { audience: "managers" }, {
@@ -83,6 +90,7 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
       title: expired.length === 1 ? "Um aceite de risco venceu" : `${expired.length} aceites de risco venceram`,
       body: "Os achados voltaram a ficar abertos e precisam de nova decisão."
     });
+    await emitEvent(db, organizationId, "finding.acceptance_expired", { findings: expired }, now);
     return expired.length;
   }
 
@@ -105,12 +113,13 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
     const rows: (typeof findings.$inferSelect)[] = [];
     const events: (typeof findingEvents.$inferInsert)[] = [];
     const urgent: string[] = [];
+    const createdRows: (typeof findings.$inferSelect)[] = [];
     let created = 0, reopened = 0, resolved = 0;
     for (const [fingerprint, f] of unique) {
       const existing = known.get(fingerprint);
       if (!existing) {
         const [row] = await tx.insert(findings).values({ ...f, organizationId, assetId, assessmentId: runId, fingerprint, discoveredAt: now, lastSeenAt: now, lastAssessmentId: runId }).returning();
-        rows.push(row); created++;
+        rows.push(row); created++; createdRows.push(row);
         if (f.severity === "critical" || f.severity === "high") urgent.push(f.title);
         continue;
       }
@@ -131,11 +140,16 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
     if (rows.length) await tx.insert(assessmentFindings).values(rows.map(r => ({ organizationId, assessmentId: runId, findingId: r.id, evidence: r.evidence })));
     if (events.length) await tx.insert(findingEvents).values(events);
     const summary: AssessmentSummary = { observed: rows.length, created, reopened, resolved };
-    return { rows, summary, urgent };
+    return { rows, summary, urgent, createdRows };
   }
 
   /** Avisa a operação quando a execução trouxe algo que pede ação (achado alto/crítico novo ou reaberto). */
-  async function notifyOutcome(asset: Asset, summary: AssessmentSummary, urgent: string[]) {
+  async function notifyOutcome(asset: Asset, run: AssessmentRow, summary: AssessmentSummary, urgent: string[], createdRows: (typeof findings.$inferSelect)[]) {
+    await emitEvent(db, organizationId, "assessment.completed", {
+      asset: { id: asset.id, name: asset.name, url: asset.url },
+      assessment: { id: run.id, trigger: run.trigger, method: run.method, startedAt: iso(run.startedAt), finishedAt: iso(run.finishedAt), summary, link: appLink("/avaliacoes") },
+      newFindings: createdRows.slice(0, 100).map(f => ({ id: f.id, title: f.title, severity: f.severity, category: f.category }))
+    }, run.finishedAt ?? undefined);
     if (!urgent.length && !summary.reopened) return;
     const parts = [urgent.length && `${urgent.length} achado(s) novo(s) de severidade alta ou crítica`, summary.reopened && `${summary.reopened} achado(s) reaberto(s)`].filter(Boolean);
     await notify(db, organizationId, { audience: "operators" }, {
@@ -204,7 +218,9 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
       await notify(db, organizationId, { audience: "managers", exclude: actorUserId }, {
         kind: "scope.pending", link: "/escopos", title: `Escopo ${input.reference} aguarda aprovação`, body: input.hostnames.join(", ")
       });
-      return (await this.getAuthorization(id))!;
+      const created = (await this.getAuthorization(id))!;
+      await emitEvent(db, organizationId, "scope.pending", { scope: scopeEvent(created) });
+      return created;
     },
 
     /**
@@ -220,7 +236,9 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
       if (current.validUntil && new Date(current.validUntil) < now) throw new RepositoryError("A janela desta autorização já terminou.", 409);
       await db.update(authorizations).set({ status: "approved", approvedBy: approver.id, approvedAt: now }).where(and(own(authorizations), eq(authorizations.id, id), eq(authorizations.status, "pending")));
       await this.audit("scope.approved", "authorization", id, { reference: current.reference, selfApproved });
-      return (await this.getAuthorization(id))!;
+      const approved = (await this.getAuthorization(id))!;
+      await emitEvent(db, organizationId, "scope.approved", { scope: scopeEvent(approved), selfApproved }, now);
+      return approved;
     },
 
     async revokeAuthorization(id: string, reason: string, now = new Date()): Promise<Authorization> {
@@ -229,7 +247,9 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
       if (current.status === "revoked") throw new RepositoryError("A autorização já está revogada.", 409);
       await db.update(authorizations).set({ status: "revoked", revokedBy: actorUserId, revokedAt: now, revokeReason: reason }).where(and(own(authorizations), eq(authorizations.id, id)));
       await this.audit("scope.revoked", "authorization", id, { reference: current.reference, reason });
-      return (await this.getAuthorization(id))!;
+      const revoked = (await this.getAuthorization(id))!;
+      await emitEvent(db, organizationId, "scope.revoked", { scope: scopeEvent(revoked), reason }, now);
+      return revoked;
     },
 
     // ---- Ativos -----------------------------------------------------------------
@@ -302,6 +322,10 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
       }).where(and(own(findings), eq(findings.id, id))).returning();
       await db.insert(findingEvents).values({ organizationId, findingId: id, actorUserId, fromStatus: current.status, toStatus: change.status, reason: change.reason?.trim() || null, createdAt: now });
       await this.audit("finding.status_changed", "finding", id, { from: current.status, to: change.status, reason: change.reason ?? null, acceptedUntil: iso(change.acceptedUntil ?? null) });
+      await emitEvent(db, organizationId, "finding.status_changed", {
+        finding: { id, assetId: row.assetId, title: row.title, severity: row.severity, category: row.category, status: row.status, previousStatus: current.status, reason: row.statusReason, acceptedUntil: iso(row.acceptedUntil), link: appLink("/achados") },
+        actor: actorUserId ? { id: actorUserId } : null
+      }, now);
       return toFinding(row);
     },
 
@@ -354,13 +378,13 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
       const asset = await this.getAsset(run.assetId);
       if (!asset) throw new RepositoryError("Ativo não encontrado.", 404);
       await expireAcceptances(now);
-      const { rows, summary, urgent } = await db.transaction(async tx => {
+      const { rows, summary, urgent, createdRows } = await db.transaction(async tx => {
         const result = await consolidate(tx as unknown as Database, runId, run.assetId, observed, now);
         await tx.update(assessments).set({ status: "completed", finishedAt: now, lockedAt: null, error: null, summary: result.summary }).where(eq(assessments.id, runId));
         await tx.insert(auditLog).values({ organizationId, actorUserId, action: "assessment.completed", targetType: "asset", targetId: run.assetId, metadata: { assessmentId: runId, ...result.summary, method: run.method, trigger: run.trigger } });
         return result;
       });
-      await notifyOutcome(asset, summary, urgent);
+      await notifyOutcome(asset, { ...run, status: "completed", startedAt: run.startedAt, finishedAt: now }, summary, urgent, createdRows);
       return { run: (await this.getAssessment(runId))!, findings: rows.map(r => toFinding(r)) };
     },
 
@@ -373,6 +397,10 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
       await notify(db, organizationId, run.requestedBy ? { userIds: [run.requestedBy] } : { audience: "operators" }, {
         kind: "assessment.failed", link: "/avaliacoes", title: `Avaliação de ${asset?.name ?? "ativo"} não concluída`, body: error.slice(0, 300)
       });
+      await emitEvent(db, organizationId, "assessment.failed", {
+        asset: asset ? { id: asset.id, name: asset.name, url: asset.url } : { id: run.assetId },
+        assessment: { id: run.id, trigger: run.trigger, method: run.method, attempts: run.attempts, error: run.error, finishedAt: iso(run.finishedAt), link: appLink("/avaliacoes") }
+      }, now);
     },
 
     /** Grava uma execução já feita (fora da fila: dados demonstrativos e testes) e consolida os achados. */
@@ -387,7 +415,7 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
         await tx.insert(auditLog).values({ organizationId, actorUserId, action: "assessment.completed", targetType: "asset", targetId: assetId, metadata: { assessmentId: run.id, ...consolidated.summary, method } });
         return { run: { ...run, summary: consolidated.summary }, ...consolidated };
       });
-      await notifyOutcome(asset, result.summary, result.urgent);
+      await notifyOutcome(asset, { ...result.run, finishedAt: now }, result.summary, result.urgent, result.createdRows);
       return { run: toAssessment(result.run, { findingIds: result.rows.map(r => r.id) }), findings: result.rows.map(r => toFinding(r)) };
     },
 
@@ -405,7 +433,7 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
     // ---- Auditoria --------------------------------------------------------------
 
     async audit(action: string, targetType: string, targetId: string | null, metadata: Record<string, unknown> = {}) {
-      await db.insert(auditLog).values({ organizationId, actorUserId, action, targetType, targetId, metadata });
+      await db.insert(auditLog).values({ organizationId, actorUserId, action, targetType, targetId, metadata: context.apiTokenId ? { ...metadata, via: "api_token", apiTokenId: context.apiTokenId } : metadata });
     },
 
     /** Mais recentes primeiro; `before` (seq) pagina para trás e `actionPrefix` filtra por categoria (ex.: "auth."). */
