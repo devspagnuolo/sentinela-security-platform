@@ -20,4 +20,4 @@ export const POST = withAuth("asset:read", async ({ user, id: sessionId, repo },
   await revokeUserSessions(db, user.id, sessionId);
   await repo.audit("auth.password_changed", "user", user.id);
   return NextResponse.json({ ok: true });
-});
+}, { allowDuringMfaEnrollment: true });

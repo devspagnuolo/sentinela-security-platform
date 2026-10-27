@@ -48,15 +48,21 @@ export type AuthContext = ActiveSession & { repo: TenantRepository };
 
 export const unauthorized = () => NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
 export const forbidden = () => NextResponse.json({ error: "Seu papel não permite esta ação." }, { status: 403 });
+export const mfaEnrollmentRequired = () => NextResponse.json({ error: "Sua organização exige verificação em duas etapas. Cadastre-a em Minha conta.", code: "mfa_enrollment_required" }, { status: 403 });
 export const crossOrigin = () => NextResponse.json({ error: "Origem da requisição não permitida." }, { status: 403 });
 
-/** Envolve um route handler exigindo sessão válida, permissão e mesma origem. */
-export function withAuth<C>(permission: Permission, handler: (auth: AuthContext, request: Request, context: C) => Promise<Response>) {
+/**
+ * Envolve um route handler exigindo sessão válida, permissão e mesma origem.
+ * Se a organização exige MFA e o usuário ainda não cadastrou, só rotas com
+ * allowDuringMfaEnrollment (as da própria conta) respondem.
+ */
+export function withAuth<C>(permission: Permission, handler: (auth: AuthContext, request: Request, context: C) => Promise<Response>, options: { allowDuringMfaEnrollment?: boolean } = {}) {
   return async (request: Request, context: C): Promise<Response> => {
     if (!isSameOrigin(request)) return crossOrigin();
     const db = await getDb();
     const session = await validateSession(db, requestToken(request));
     if (!session) return unauthorized();
+    if (session.mfaEnrollmentRequired && !options.allowDuringMfaEnrollment) return mfaEnrollmentRequired();
     const repo = tenantRepository(db, session.organizationId, session.user.id);
     if (!can(session.role, permission)) {
       await repo.audit("auth.forbidden", "permission", permission, { method: request.method, path: new URL(request.url).pathname });

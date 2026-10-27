@@ -5,6 +5,7 @@ import { getDb } from "@/db/client";
 import { users } from "@/db/schema";
 import { memberRepository } from "@/db/users";
 import { withAuth } from "@/lib/auth/http";
+import { disableMfa } from "@/lib/auth/mfa";
 import { hashPassword, passwordPolicyError } from "@/lib/auth/password";
 import { canManageRole } from "@/lib/auth/rbac";
 import { revokeUserSessions } from "@/lib/auth/session";
@@ -33,8 +34,9 @@ export const PATCH = withAuth("user:manage", async ({ organizationId, role, user
     if (policy) return deny(policy, 400);
     await db.update(users).set({ passwordHash: await hashPassword(changes.password), passwordChangedAt: new Date(), failedLoginCount: 0, lockedUntil: null }).where(eq(users.id, id));
   }
+  if (changes.resetMfa) await disableMfa(db, id);
   const updated = await members.update(id, { role: changes.role, disabled: changes.disabled, name: changes.name });
-  if (changes.disabled || changes.password !== undefined || changes.role) await revokeUserSessions(db, id);
-  await repo.audit("user.updated", "user", id, { role: changes.role, disabled: changes.disabled, name: changes.name, passwordReset: changes.password !== undefined });
+  if (changes.disabled || changes.password !== undefined || changes.role || changes.resetMfa) await revokeUserSessions(db, id);
+  await repo.audit("user.updated", "user", id, { role: changes.role, disabled: changes.disabled, name: changes.name, passwordReset: changes.password !== undefined, mfaReset: changes.resetMfa ?? false });
   return NextResponse.json(updated);
 });

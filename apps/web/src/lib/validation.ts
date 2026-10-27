@@ -31,7 +31,8 @@ export const updateUserSchema = z.object({
   role: role.optional(),
   disabled: z.boolean().optional(),
   name: z.string().trim().min(2).max(100).optional(),
-  password: z.string().optional()
+  password: z.string().optional(),
+  resetMfa: z.literal(true).optional()
 }).refine(v => Object.values(v).some(x => x !== undefined), "Nada para alterar.");
 
 export const changePasswordSchema = z.object({ currentPassword: z.string().max(256), newPassword: z.string() });
@@ -42,3 +43,8 @@ export async function parseJson<T>(request: Request, schema: z.ZodType<T>): Prom
   const parsed = schema.safeParse(body);
   return parsed.success ? { data: parsed.data } : { error: firstIssue(parsed.error) };
 }
+
+export const mfaVerifySchema = z.object({ challenge: z.string().min(10).max(128), code: z.string().trim().min(6).max(20) });
+export const mfaCodeSchema = z.object({ code: z.string().trim().min(6).max(20) });
+export const passwordConfirmSchema = z.object({ password: z.string().max(256) });
+export const organizationSchema = z.object({ requireMfa: z.boolean().optional(), name: z.string().trim().min(2).max(100).optional() }).refine(v => Object.values(v).some(x => x !== undefined), "Nada para alterar.");

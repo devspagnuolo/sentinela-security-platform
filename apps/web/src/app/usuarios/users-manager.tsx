@@ -39,11 +39,12 @@ export default function UsersManager({ currentUserId, assignableRoles }: { curre
       <input placeholder="Senha inicial (12+ caracteres)" type="password" autoComplete="new-password" required minLength={12} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
       <button className="button button-primary"><Plus size={15}/>Criar</button>
     </form>}
-    <table className="users-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Último acesso</th><th>Status</th></tr></thead><tbody>
+    <table className="users-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Último acesso</th><th>2 etapas</th><th>Status</th></tr></thead><tbody>
       {members.map(m => <tr key={m.id}>
         <td>{m.name}{m.id === currentUserId && " (você)"}</td><td>{m.email}</td>
         <td>{manageable(m) ? <select value={m.role} onChange={e => void send(`/api/users/${m.id}`, "PATCH", { role: e.target.value }, "Papel atualizado.")}>{assignableRoles.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select> : ROLE_LABELS[m.role]}</td>
         <td>{m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleString("pt-BR") : "Nunca"}</td>
+        <td>{m.mfaEnabled ? "Ativa" : "Não configurada"}{manageable(m) && m.mfaEnabled && <> <button className="run-button" onClick={() => { if (confirm(`Resetar a verificação em duas etapas de ${m.name}? A pessoa precisará configurá-la de novo e as sessões dela serão encerradas.`)) void send(`/api/users/${m.id}`, "PATCH", { resetMfa: true }, "Verificação em duas etapas resetada e sessões encerradas."); }}>Resetar</button></>}</td>
         <td>{manageable(m) ? <button className="run-button" onClick={() => void send(`/api/users/${m.id}`, "PATCH", { disabled: !m.disabled }, m.disabled ? "Usuário reativado." : "Usuário desativado e sessões encerradas.")}>{m.disabled ? "Reativar" : "Desativar"}</button> : m.disabled ? "Desativado" : "Ativo"}</td>
       </tr>)}
     </tbody></table>

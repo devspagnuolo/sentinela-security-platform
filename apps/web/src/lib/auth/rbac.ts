@@ -5,7 +5,7 @@ export const ROLE_LABELS: Record<Role, string> = { owner: "Owner", admin: "Admin
 
 export type Permission =
   | "asset:read" | "asset:write" | "assessment:run" | "report:read" | "export:download"
-  | "audit:read" | "user:read" | "user:manage";
+  | "audit:read" | "user:read" | "user:manage" | "org:manage";
 
 const viewer: Permission[] = ["asset:read", "report:read"];
 const analyst: Permission[] = [...viewer, "asset:write", "assessment:run", "export:download"];
@@ -15,7 +15,7 @@ const grants: Record<Role, ReadonlySet<Permission>> = {
   viewer: new Set(viewer),
   analyst: new Set(analyst),
   admin: new Set(admin),
-  owner: new Set(admin)
+  owner: new Set<Permission>([...admin, "org:manage"])
 };
 
 export function can(role: Role, permission: Permission): boolean {

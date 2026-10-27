@@ -61,7 +61,7 @@ describe("login", () => {
     const user = await newUser();
     const result = await login(db, user.email.toUpperCase(), password, { ip: "203.0.113.9" });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(await validateSession(db, result.token)).not.toBeNull();
+    if (result.ok === true) expect(await validateSession(db, result.token)).not.toBeNull();
     const [entry] = await tenantRepository(db, orgId).listAudit(1);
     expect(entry).toMatchObject({ action: "auth.login_succeeded", targetId: user.id, actorUserId: user.id });
   });
