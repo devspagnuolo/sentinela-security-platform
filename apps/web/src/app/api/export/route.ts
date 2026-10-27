@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { requestRepository } from "@/lib/tenant";
+import { withAuth } from "@/lib/auth/http";
 export const runtime = "nodejs";
-export async function GET(request: Request) {
+export const GET = withAuth("export:download", async ({ repo }, request) => {
   const format = new URL(request.url).searchParams.get("format");
   if (format !== "csv" && format !== "json") return NextResponse.json({ error: "Formato aceito: json ou csv." }, { status: 400 });
-  const repo = await requestRepository();
   const [assets, findings, assessments] = await Promise.all([repo.listAssets(), repo.listFindings(), repo.listAssessments()]);
   await repo.audit("export.downloaded", "organization", repo.organizationId, { format, findings: findings.length });
   if (format === "csv") {
@@ -13,4 +12,4 @@ export async function GET(request: Request) {
     return new NextResponse(rows.map(row => row.map(quote).join(",")).join("\r\n"), { headers: { "Content-Type":"text/csv; charset=utf-8", "Content-Disposition":"attachment; filename=sentinela-findings.csv" } });
   }
   return NextResponse.json({ generatedAt: new Date().toISOString(), assets, findings, assessments }, { headers: { "Content-Disposition":"attachment; filename=sentinela-assessment.json" } });
-}
+});
