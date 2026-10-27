@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { WEBHOOK_EVENT_TYPES, webhookUrlError, type WebhookEvent } from "./webhooks";
 import { normalizeHostPattern } from "./scope";
 
 export const createAssetSchema = z.object({
@@ -105,3 +106,16 @@ export const scheduleSchema = z.object({
   intervalDays: z.union([z.literal(0), z.literal(1), z.literal(7), z.literal(30)], { error: "Escolha manual, diária, semanal ou mensal." })
 });
 export const markReadSchema = z.object({ ids: z.array(z.string()).max(200).optional() });
+
+export const apiTokenSchema = z.object({
+  name: z.string().trim().min(2, "Dê um nome que identifique onde o token será usado.").max(80),
+  role: z.enum(["viewer", "analyst"], { error: "Tokens podem ter papel Leitor ou Analista." }),
+  days: z.union([z.literal(7), z.literal(30), z.literal(90), z.literal(365)], { error: "Escolha validade de 7, 30, 90 ou 365 dias." })
+});
+
+const webhookEvents = z.array(z.enum(WEBHOOK_EVENT_TYPES as [WebhookEvent, ...WebhookEvent[]], { error: "Evento desconhecido." })).min(1, "Escolha ao menos um evento.").max(WEBHOOK_EVENT_TYPES.length)
+  .transform(events => [...new Set(events)]);
+const webhookUrl = z.string().trim().max(2000).superRefine((value, ctx) => { const error = webhookUrlError(value); if (error) ctx.addIssue({ code: "custom", message: error }); });
+export const webhookSchema = z.object({ name: z.string().trim().min(2, "Dê um nome ao webhook.").max(80), url: webhookUrl, events: webhookEvents });
+export const webhookUpdateSchema = z.object({ name: webhookSchema.shape.name.optional(), url: webhookUrl.optional(), events: webhookEvents.optional(), enabled: z.boolean().optional() })
+  .refine(v => Object.values(v).some(x => x !== undefined), "Nada para alterar.");

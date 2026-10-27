@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { tenantRepository, type TenantRepository } from "@/db/repository";
 import { can, type Permission } from "./rbac";
 import { SESSION_TTL_MS, validateSession, type ActiveSession } from "./session";
+import { bearerToken, validateApiToken } from "./tokens";
 
 const secureCookies = () => process.env.NODE_ENV === "production" && process.env.SENTINELA_INSECURE_COOKIES !== "1";
 /** Em produção o prefixo __Host- obriga Secure, Path=/ e ausência de Domain. */
@@ -60,19 +61,38 @@ export const forbidden = () => NextResponse.json({ error: "Seu papel não permit
 export const mfaEnrollmentRequired = () => NextResponse.json({ error: "Sua organização exige verificação em duas etapas. Cadastre-a em Minha conta.", code: "mfa_enrollment_required" }, { status: 403 });
 export const crossOrigin = () => NextResponse.json({ error: "Origem da requisição não permitida." }, { status: 403 });
 
+export const invalidToken = () => NextResponse.json({ error: "Token de API inválido, expirado ou revogado." }, { status: 401, headers: { "WWW-Authenticate": 'Bearer error="invalid_token"' } });
+export const tokenNotAccepted = () => NextResponse.json({ error: "Esta rota exige login na interface; tokens de API não são aceitos aqui." }, { status: 403 });
+
+export type AuthOptions = {
+  /** Rotas da própria conta, liberadas enquanto o MFA obrigatório não foi cadastrado. */
+  allowDuringMfaEnrollment?: boolean;
+  /** Aceita "Authorization: Bearer snt_..." além do cookie. Só rotas de negócio; conta, usuários e integrações exigem pessoa logada. */
+  apiToken?: boolean;
+};
+
 /**
- * Envolve um route handler exigindo sessão válida, permissão e mesma origem.
+ * Envolve um route handler exigindo sessão válida (ou token de API, se a rota aceitar), permissão e mesma origem.
  * Se a organização exige MFA e o usuário ainda não cadastrou, só rotas com
  * allowDuringMfaEnrollment (as da própria conta) respondem.
  */
-export function withAuth<C>(permission: Permission, handler: (auth: AuthContext, request: Request, context: C) => Promise<Response>, options: { allowDuringMfaEnrollment?: boolean } = {}) {
+export function withAuth<C>(permission: Permission, handler: (auth: AuthContext, request: Request, context: C) => Promise<Response>, options: AuthOptions = {}) {
   return async (request: Request, context: C): Promise<Response> => {
-    if (!isSameOrigin(request)) return crossOrigin();
     const db = await getDb();
-    const session = await validateSession(db, requestToken(request));
-    if (!session) return unauthorized();
-    if (session.mfaEnrollmentRequired && !options.allowDuringMfaEnrollment) return mfaEnrollmentRequired();
-    const repo = tenantRepository(db, session.organizationId, session.user.id);
+    const bearer = bearerToken(request);
+    let session: ActiveSession | null;
+    if (bearer !== undefined) {
+      // Sem cookie não há CSRF: o navegador não envia Authorization para outra origem sem CORS, que não é habilitado.
+      if (!options.apiToken) return tokenNotAccepted();
+      session = await validateApiToken(db, bearer, clientMeta(request));
+      if (!session) return invalidToken();
+    } else {
+      if (!isSameOrigin(request)) return crossOrigin();
+      session = await validateSession(db, requestToken(request));
+      if (!session) return unauthorized();
+    }
+    if (session.mfaEnrollmentRequired && !(options.allowDuringMfaEnrollment && session.authMethod !== "token")) return mfaEnrollmentRequired();
+    const repo = tenantRepository(db, session.organizationId, session.user.id, session.authMethod === "token" ? { apiTokenId: session.id } : {});
     if (!can(session.role, permission)) {
       await repo.audit("auth.forbidden", "permission", permission, { method: request.method, path: new URL(request.url).pathname });
       return forbidden();

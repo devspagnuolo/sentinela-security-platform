@@ -18,4 +18,4 @@ export const GET = withAuth("export:download", async ({ repo }, request) => {
     return new NextResponse(toCsv(rows), { headers: { "Content-Type":"text/csv; charset=utf-8", "Content-Disposition":"attachment; filename=sentinela-findings.csv" } });
   }
   return NextResponse.json({ generatedAt: new Date().toISOString(), assets, findings, assessments }, { headers: { "Content-Disposition":"attachment; filename=sentinela-assessment.json" } });
-});
+}, { apiToken: true });

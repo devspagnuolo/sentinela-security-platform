@@ -1,5 +1,5 @@
 /** Categorias de evento de auditoria (prefixo da ação) e rótulos para a interface. */
-export const AUDIT_CATEGORIES = { auth: "Acesso", user: "Usuários", sso: "SSO", organization: "Organização", scope: "Escopos", asset: "Ativos", assessment: "Avaliações", finding: "Achados", report: "Relatórios", export: "Exportações" } as const;
+export const AUDIT_CATEGORIES = { auth: "Acesso", user: "Usuários", sso: "SSO", organization: "Organização", scope: "Escopos", asset: "Ativos", assessment: "Avaliações", finding: "Achados", report: "Relatórios", export: "Exportações", token: "Tokens de API", webhook: "Webhooks" } as const;
 export type AuditCategory = keyof typeof AUDIT_CATEGORIES;
 export const isAuditCategory = (value: string): value is AuditCategory => Object.hasOwn(AUDIT_CATEGORIES, value);
 
@@ -36,6 +36,14 @@ const ACTION_LABELS: Record<string, string> = {
   "finding.status_changed": "Triagem de achado",
   "report.generated": "Relatório gerado",
   "export.downloaded": "Achados exportados",
-  "export.audit_downloaded": "Auditoria exportada"
+  "export.audit_downloaded": "Auditoria exportada",
+  "token.created": "Token de API criado",
+  "token.revoked": "Token de API revogado",
+  "webhook.created": "Webhook cadastrado",
+  "webhook.updated": "Webhook alterado",
+  "webhook.deleted": "Webhook removido",
+  "webhook.secret_rotated": "Segredo do webhook trocado",
+  "webhook.tested": "Webhook testado",
+  "webhook.disabled": "Webhook desligado por falhas"
 };
 export const actionLabel = (action: string) => ACTION_LABELS[action] ?? action;

@@ -9,6 +9,7 @@ import { disableMfa } from "@/lib/auth/mfa";
 import { hashPassword, passwordPolicyError } from "@/lib/auth/password";
 import { canManageRole } from "@/lib/auth/rbac";
 import { revokeUserSessions } from "@/lib/auth/session";
+import { revokeUserTokens } from "@/lib/auth/tokens";
 import { parseJson, updateUserSchema } from "@/lib/validation";
 export const runtime = "nodejs";
 
@@ -37,6 +38,8 @@ export const PATCH = withAuth("user:manage", async ({ organizationId, role, user
   if (changes.resetMfa) await disableMfa(db, id);
   const updated = await members.update(id, { role: changes.role, disabled: changes.disabled, name: changes.name });
   if (changes.disabled || changes.password !== undefined || changes.role || changes.resetMfa) await revokeUserSessions(db, id);
+  // Tokens de API seguem o menor entre o papel do token e o atual; desativar a pessoa os revoga de vez.
+  if (changes.disabled) await revokeUserTokens(db, id);
   await repo.audit("user.updated", "user", id, { role: changes.role, disabled: changes.disabled, name: changes.name, passwordReset: changes.password !== undefined, mfaReset: changes.resetMfa ?? false });
   return NextResponse.json(updated);
 });

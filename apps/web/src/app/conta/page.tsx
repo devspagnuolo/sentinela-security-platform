@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { organizations, users } from "@/db/schema";
 import { remainingRecoveryCodes } from "@/lib/auth/mfa";
-import { can } from "@/lib/auth/rbac";
+import { can, rankOf } from "@/lib/auth/rbac";
+import { TOKEN_ROLES } from "@/lib/auth/tokens";
 import { requireSession } from "@/lib/auth/server";
 import AccountSettings from "./account-settings";
 
@@ -22,5 +23,6 @@ export default async function AccountPage() {
     orgRequiresMfa={org.requireMfa}
     hasPassword={Boolean(account?.passwordHash)}
     signedInWithSso={session.authMethod === "sso"}
+    tokenRoles={TOKEN_ROLES.filter(r => rankOf(r) <= rankOf(session.role))}
   />;
 }

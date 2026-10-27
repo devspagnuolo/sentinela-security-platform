@@ -20,4 +20,4 @@ export const GET = withAuth("report:read", async ({ repo }, request, { params }:
   if (format === "json") return NextResponse.json(report, { headers: { "Cache-Control": "no-store", "Content-Disposition": `attachment; filename=${filename}.json` } });
   if (format === "pdf") return new NextResponse(Buffer.from(await renderPdf(report)), { headers: { "Content-Type": "application/pdf", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename=${filename}.pdf` } });
   return new NextResponse(renderHtml(report), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'" } });
-});
+}, { apiToken: true });

@@ -2,13 +2,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ApiTokens from "./api-tokens";
 import SsoSettings from "./sso-settings";
+import type { Role } from "@/lib/auth/rbac";
 import { ArrowLeft, Download, KeyRound, LogOut, ShieldCheck, ShieldOff } from "lucide-react";
 
 type Props = {
   user: { id: string; email: string; name: string };
   mfaEnabled: boolean; mfaEnrollmentRequired: boolean; recoveryCodesLeft: number;
   canManageOrg: boolean; orgRequiresMfa: boolean; hasPassword: boolean; signedInWithSso: boolean;
+  /** Papéis que esta pessoa pode dar a um token de API. */
+  tokenRoles: Role[];
 };
 type Setup = { secret: string; uri: string; qrSvg: string };
 
@@ -120,6 +124,8 @@ export default function AccountSettings(props: Props) {
         <button className="button button-primary" disabled={busy} onClick={() => void startSetup()}><ShieldCheck size={15}/>Configurar</button>
       </>}
     </section>
+
+    {!props.mfaEnrollmentRequired && <ApiTokens roles={props.tokenRoles} />}
 
     {props.canManageOrg && <SsoSettings />}
 

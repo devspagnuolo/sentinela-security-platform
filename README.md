@@ -72,6 +72,10 @@ Ao clicar em **Avaliar**, a avaliação entra numa fila no próprio PostgreSQL e
 
 O sino do painel leva às **Notificações**. São avisos de achados altos ou críticos novos ou reabertos, avaliações não concluídas, escopos aguardando aprovação ou vencendo em até 14 dias e aceites de risco vencidos. Cada aviso vai para os papéis que podem agir sobre ele. `SENTINELA_WORKER=0` desliga o worker de um processo, e `SENTINELA_WORKER_CONCURRENCY` (padrão 2) limita as execuções simultâneas. Várias instâncias podem rodar o worker ao mesmo tempo, porque cada job é pego com `FOR UPDATE SKIP LOCKED`.
 
+## API e integrações
+
+Integrações autenticam com **tokens de API** pessoais, criados em **Minha conta**. Cada token tem papel Leitor ou Analista e validade de até um ano, e só acessa as rotas de negócio (ativos, avaliações, escopos, achados, relatórios e exportação). Em **Integrações**, Admins e Owners cadastram **webhooks** assinados com HMAC-SHA256 para avaliações concluídas ou com falha, triagem de achados, aceites vencidos e mudanças de escopo. Cada entrega tem novas tentativas com espera crescente, e o webhook é desligado depois de falhas seguidas. Rotas, eventos, formato e exemplos de validação da assinatura estão em [docs/api.md](docs/api.md).
+
 ## Produção
 
 A imagem Docker (`Dockerfile`, compatível com x86 e ARM) e o compose de produção (`deploy/`) sobem PostgreSQL, aplicação, Caddy com HTTPS automático e backup diário. O passo a passo para uma VM gratuita do Oracle Cloud está em [docs/deploy-oracle-cloud.md](docs/deploy-oracle-cloud.md). A aplicação expõe `/api/health` (com `?ready=1` também verifica o banco), escreve logs estruturados em JSON e mantém uma trilha de auditoria consultável em **Auditoria**, com exportação CSV.
@@ -80,7 +84,7 @@ A imagem Docker (`Dockerfile`, compatível com x86 e ARM) e o compose de produç
 
 O roadmap enterprise segue nesta ordem:
 
-1. API com tokens e webhooks, incluindo notificações por e-mail e webhook.
+1. Notificações por e-mail.
 2. Controles de LGPD (retenção, exportação e exclusão de dados).
 3. Inventário passivo de tecnologias e conectores cloud read-only.
 

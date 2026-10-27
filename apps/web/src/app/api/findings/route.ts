@@ -10,4 +10,4 @@ export const GET = withAuth("asset:read", async ({ repo }, request) => {
   const params = new URL(request.url).searchParams;
   const status = params.get("status")?.split(",").filter((s): s is FindingStatus => STATUSES.includes(s as FindingStatus));
   return NextResponse.json(await repo.listFindings({ status, assetId: params.get("assetId") ?? undefined }), { headers: { "Cache-Control": "no-store" } });
-});
+}, { apiToken: true });
