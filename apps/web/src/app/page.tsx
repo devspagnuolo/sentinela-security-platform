@@ -1,10 +1,9 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Activity, ArrowDownRight, ArrowUpRight, ArrowUpRightFromSquare, Bell, Check, ChevronDown, CircleHelp, Clock3, Cloud, Download, ExternalLink, FileDown, Globe2, LayoutDashboard, LockKeyhole, MoreHorizontal, Plus, Radar, Search, Settings2, Shield, ShieldAlert, ShieldCheck, SlidersHorizontal, Sparkles, Target, X } from "lucide-react";
+import { Activity, ArrowDownRight, ArrowUpRight, ArrowUpRightFromSquare, Bell, Check, ChevronDown, CircleHelp, Cloud, Download, ExternalLink, FileDown, Globe2, LayoutDashboard, LockKeyhole, MoreHorizontal, Plus, Radar, Search, Settings2, ShieldAlert, ShieldCheck, SlidersHorizontal, Target, X } from "lucide-react";
 import type { Asset, Finding, Severity } from "@/lib/types";
 
 const sev: Record<Severity,{label:string;className:string}>={critical:{label:"Crítica",className:"critical"},high:{label:"Alta",className:"high"},medium:{label:"Média",className:"medium"},low:{label:"Baixa",className:"low"},info:{label:"Info",className:"info"}};
-const initialHistory=[28,32,30,38,35,44,41,50,46,57,54,64];
 function score(findings:Finding[]){const penalty=findings.reduce((n,f)=>n+({critical:14,high:8,medium:4,low:1,info:0}[f.severity]),0);return Math.max(0,Math.min(100,91-penalty));}
 export default function Home(){
  const [assets,setAssets]=useState<Asset[]>([]),[findings,setFindings]=useState<Finding[]>([]),[query,setQuery]=useState(""),[modal,setModal]=useState(false),[busy,setBusy]=useState<string|null>(null),[notice,setNotice]=useState(""),[form,setForm]=useState({name:"",url:"",owner:"",kind:"Web application",authorizationRef:"",authorized:false});

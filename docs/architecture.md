@@ -6,7 +6,7 @@ Sentinela é uma estação de trabalho privada para um consultor de segurança. 
 
 ## Estado implementado
 
-A interface Next.js e suas rotas API usam memória do processo para demonstração. O scanner faz uma requisição HTTPS GET para a URL raiz, sem redirecionamento, com timeout de 5 segundos. Verifica alguns cabeçalhos defensivos, política CORS observada, atributos de cookies e banner Server. O corpo da resposta não é persistido. O relatório por ativo apresenta método, evidências mínimas, limitações e recomendações em JSON ou HTML imprimível.
+A interface Next.js e suas rotas API usam memória do processo para demonstração. O scanner faz uma requisição HTTPS GET para a URL raiz, sem redirecionamento, com timeout de 5 segundos, conectando ao endereço IP validado (DNS fixado) e lendo somente status e cabeçalhos. Verifica alguns cabeçalhos defensivos, política CORS observada, atributos de cookies e banner Server. O corpo da resposta não é persistido. O relatório por ativo apresenta método, evidências mínimas, limitações e recomendações em JSON ou HTML imprimível.
 
 ## Fluxo de dados proposto
 
@@ -30,4 +30,4 @@ A ausência de cabeçalho ou um banner é um indicador de configuração, não p
 
 ## Limites atuais
 
-Sem autenticação, persistência, aprovação com validade, DNS fixado, varredura TLS, descoberta ampla, testes autenticados, cloud, PDF gerado no servidor ou IA. O protótipo não deve receber dados reais de clientes nem ser exposto publicamente até que os controles essenciais estejam implementados.
+Sem autenticação, persistência, aprovação com validade, varredura TLS, descoberta ampla, testes autenticados, cloud, PDF gerado no servidor ou IA. O protótipo não deve receber dados reais de clientes nem ser exposto publicamente até que os controles essenciais estejam implementados.

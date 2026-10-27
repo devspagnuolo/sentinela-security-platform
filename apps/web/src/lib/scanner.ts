@@ -1,61 +1,104 @@
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { lookup as dnsLookup } from "node:dns/promises";
+import { request } from "node:https";
+import { isIP, type LookupFunction } from "node:net";
 import { randomUUID } from "node:crypto";
+import { isHostAllowed, scannerConfig, type ScannerConfig } from "./config";
+import { isPublicAddress } from "./network";
 import type { Asset, Finding } from "./types";
 
-function isForbiddenIPv4(ip: string) {
-  const [a,b] = ip.split(".").map(Number);
-  return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
-}
-function isForbiddenIPv6(ip: string) {
-  const s = ip.toLowerCase();
-  return s === "::" || s === "::1" || s.startsWith("fc") || s.startsWith("fd") || s.startsWith("fe8") || s.startsWith("fe9") || s.startsWith("fea") || s.startsWith("feb") || s.startsWith("ff") || s.startsWith("::ffff:");
-}
-export async function validateTarget(raw: string) {
+export type ResolvedAddress = { address: string; family: number };
+export type Resolver = (hostname: string) => Promise<ResolvedAddress[]>;
+export type ObservedResponse = { status: number; header(name: string): string | undefined; cookies: string[] };
+export type Fetcher = (url: URL, pinned: ResolvedAddress) => Promise<ObservedResponse>;
+
+const USER_AGENT = "Sentinela-Authorized-Assessment/0.2";
+const TIMEOUT_MS = 5000;
+
+const systemResolver: Resolver = hostname => dnsLookup(hostname, { all: true, verbatim: true });
+
+export async function validateTarget(raw: string, resolve: Resolver = systemResolver) {
   let url: URL;
   try { url = new URL(raw); } catch { throw new Error("Informe uma URL válida."); }
   if (url.protocol !== "https:") throw new Error("Somente URLs HTTPS são aceitas.");
   if (url.username || url.password || url.port && url.port !== "443") throw new Error("Credenciais embutidas e portas alternativas não são aceitas.");
-  if (isIP(url.hostname)) throw new Error("Cadastre um hostname DNS, não um IP literal.");
-  const results = await lookup(url.hostname, { all: true, verbatim: true });
-  if (!results.length || results.some(({address, family}) => family === 4 ? isForbiddenIPv4(address) : isForbiddenIPv6(address))) throw new Error("O alvo resolve para endereço não público ou não verificável.");
-  return url;
+  if (isIP(url.hostname.replace(/^\[|\]$/g, ""))) throw new Error("Cadastre um hostname DNS, não um IP literal.");
+  let addresses: ResolvedAddress[];
+  try { addresses = await resolve(url.hostname); } catch { throw new Error("Não foi possível resolver o hostname informado."); }
+  if (!addresses.length || addresses.some(({ address }) => !isPublicAddress(address))) throw new Error("O alvo resolve para endereço não público ou não verificável.");
+  return { url, addresses };
 }
+
+/**
+ * Faz uma única requisição GET conectando ao endereço já validado (sem nova
+ * resolução DNS, o que impede DNS rebinding). Apenas status e cabeçalhos são
+ * lidos; o corpo nunca é consumido e a conexão é encerrada logo após os headers.
+ */
+export const pinnedFetch: Fetcher = (url, pinned) => new Promise((resolve, reject) => {
+  const lookup: LookupFunction = (_hostname, options, callback) => {
+    if (options.all) callback(null, [pinned]);
+    else callback(null, pinned.address, pinned.family);
+  };
+  const req = request({
+    hostname: url.hostname, port: 443, path: "/", method: "GET", lookup, servername: url.hostname,
+    headers: { "User-Agent": USER_AGENT, Accept: "*/*" }, maxHeaderSize: 16 * 1024, timeout: TIMEOUT_MS
+  }, res => {
+    const remote = res.socket?.remoteAddress;
+    const raw = res.headers;
+    res.destroy();
+    if (remote && remote.replace(/^::ffff:/, "") !== pinned.address.replace(/^::ffff:/, "")) return reject(new Error("A conexão não corresponde ao endereço validado."));
+    const setCookie = raw["set-cookie"];
+    resolve({
+      status: res.statusCode ?? 0,
+      header: name => { const value = raw[name.toLowerCase()]; return Array.isArray(value) ? value.join(", ") : value; },
+      cookies: Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : []
+    });
+  });
+  req.on("timeout", () => req.destroy(new Error("Tempo limite excedido ao contatar o alvo.")));
+  req.on("error", error => reject(error));
+  req.end();
+});
+
 const makeFinding = (asset: Asset, title: string, severity: Finding["severity"], category: string, description: string, evidence: string, recommendation: string): Finding => ({ id: randomUUID(), assetId: asset.id, title, severity, category, description, evidence, recommendation, references: ["OWASP Secure Headers Project", "CWE-693"], discoveredAt: new Date().toISOString() });
 
-export async function assess(asset: Asset): Promise<Finding[]> {
-  if (process.env.SENTINELA_ENABLE_SCANNER !== "1") throw new Error("Scanner desabilitado. Configure o ambiente antes de executar avaliações.");
-  const url = await validateTarget(asset.url);
-  const allowedHosts = (process.env.SENTINELA_ALLOWED_HOSTS ?? "").split(",").map(host => host.trim().toLowerCase()).filter(Boolean);
-  if (!allowedHosts.includes(url.hostname.toLowerCase())) throw new Error("O hostname não consta na lista de alvos autorizados pelo operador.");
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-  try {
-    const response = await fetch(url, { method: "GET", redirect: "manual", signal: controller.signal, headers: { "User-Agent": "Sentinela-Authorized-Assessment/0.1" }, cache: "no-store" });
-    if (response.status >= 300 && response.status < 400) throw new Error("O alvo respondeu com redirecionamento; o MVP não segue redirects.");
-    const findings: Finding[] = [];
-    const headers = response.headers;
-    const checks: [string,string,string][] = [
-      ["content-security-policy", "Política de segurança de conteúdo ausente", "Defina uma CSP adequada ao inventário de recursos e monitore violações antes do bloqueio."],
-      ["strict-transport-security", "HSTS ausente", "Após confirmar HTTPS em todos os subdomínios aplicáveis, habilite HSTS com max-age gradual."],
-      ["x-content-type-options", "X-Content-Type-Options ausente", "Configure X-Content-Type-Options: nosniff."],
-      ["referrer-policy", "Referrer-Policy ausente", "Defina uma política como strict-origin-when-cross-origin conforme os requisitos."],
-      ["permissions-policy", "Permissions-Policy ausente", "Desabilite explicitamente recursos do navegador que a aplicação não utiliza."]
-    ];
-    for (const [header,title,recommendation] of checks) if (!headers.has(header)) findings.push(makeFinding(asset,title,header === "strict-transport-security" ? "low" : "medium","HTTP Headers",`A resposta HTTPS não incluiu ${header}.`,`Header ${header} ausente`,recommendation));
-    const acao = headers.get("access-control-allow-origin");
-    if (acao === "*") findings.push(makeFinding(asset,"CORS permite qualquer origem","medium","CORS","A resposta permite leitura cross-origin por qualquer origem.","Access-Control-Allow-Origin: *","Restrinja a lista de origens aos frontends autorizados; não use wildcard em respostas com credenciais."));
-    const cookies = headers.getSetCookie?.() ?? (headers.get("set-cookie") ? [headers.get("set-cookie")!] : []);
-    for (const cookie of cookies) {
-      const lower = cookie.toLowerCase();
-      const missing = [!lower.includes("; secure") && "Secure", !lower.includes("; httponly") && "HttpOnly", !lower.includes("samesite=") && "SameSite"].filter(Boolean);
-      if (missing.length) findings.push(makeFinding(asset,"Cookie sem atributos de proteção","low","Cookies",`Um cookie não declarou todos os atributos esperados (${missing.join(", ")}).`,"Valores e nomes de cookies omitidos; atributos ausentes registrados apenas como categorias.","Configure Secure, HttpOnly e SameSite conforme o uso do cookie."));
-    }
-    const server = headers.get("server");
-    if (server && /\d/.test(server)) findings.push(makeFinding(asset,"Banner de servidor revela versão","info","Exposição de informações","O cabeçalho Server aparenta expor uma versão.",`Server: ${server.slice(0,80)}`,"Remova versões detalhadas dos banners e mantenha o software atualizado."));
-    const poweredBy = headers.get("x-powered-by");
-    if (poweredBy) findings.push(makeFinding(asset,"Tecnologia anunciada pelo servidor","info","Inventário tecnológico","O cabeçalho X-Powered-By anuncia uma tecnologia; este dado pode não refletir a versão real.",`X-Powered-By: ${poweredBy.slice(0,80)}`,"Confirme o inventário e evite divulgar detalhes de versão desnecessários."));
-    await response.body?.cancel();
-    return findings;
-  } finally { clearTimeout(timer); }
+const headerChecks: [string, string, Finding["severity"], string][] = [
+  ["content-security-policy", "Política de segurança de conteúdo ausente", "medium", "Defina uma CSP adequada ao inventário de recursos e monitore violações antes do bloqueio."],
+  ["strict-transport-security", "HSTS ausente", "low", "Após confirmar HTTPS em todos os subdomínios aplicáveis, habilite HSTS com max-age gradual."],
+  ["x-content-type-options", "X-Content-Type-Options ausente", "medium", "Configure X-Content-Type-Options: nosniff."],
+  ["referrer-policy", "Referrer-Policy ausente", "medium", "Defina uma política como strict-origin-when-cross-origin conforme os requisitos."],
+  ["permissions-policy", "Permissions-Policy ausente", "medium", "Desabilite explicitamente recursos do navegador que a aplicação não utiliza."]
+];
+
+function cookieAttributes(cookie: string) {
+  return new Set(cookie.split(";").slice(1).map(part => part.split("=")[0].trim().toLowerCase()));
+}
+
+/** Converte os metadados observados em achados preliminares. Função pura. */
+export function analyzeResponse(asset: Asset, response: ObservedResponse): Finding[] {
+  const findings: Finding[] = [];
+  for (const [header, title, severity, recommendation] of headerChecks) {
+    if (response.header(header) === undefined) findings.push(makeFinding(asset, title, severity, "HTTP Headers", `A resposta HTTPS não incluiu ${header}.`, `Header ${header} ausente`, recommendation));
+  }
+  if (response.header("access-control-allow-origin")?.trim() === "*") findings.push(makeFinding(asset, "CORS permite qualquer origem", "medium", "CORS", "A resposta permite leitura cross-origin por qualquer origem.", "Access-Control-Allow-Origin: *", "Restrinja a lista de origens aos frontends autorizados; não use wildcard em respostas com credenciais."));
+  for (const cookie of response.cookies) {
+    const attributes = cookieAttributes(cookie);
+    const missing = [["secure", "Secure"], ["httponly", "HttpOnly"], ["samesite", "SameSite"]].filter(([key]) => !attributes.has(key)).map(([, label]) => label);
+    if (missing.length) findings.push(makeFinding(asset, "Cookie sem atributos de proteção", "low", "Cookies", `Um cookie não declarou todos os atributos esperados (${missing.join(", ")}).`, "Valores e nomes de cookies omitidos; atributos ausentes registrados apenas como categorias.", "Configure Secure, HttpOnly e SameSite conforme o uso do cookie."));
+  }
+  const server = response.header("server");
+  if (server && /\d/.test(server)) findings.push(makeFinding(asset, "Banner de servidor revela versão", "info", "Exposição de informações", "O cabeçalho Server aparenta expor uma versão.", `Server: ${server.slice(0, 80)}`, "Remova versões detalhadas dos banners e mantenha o software atualizado."));
+  const poweredBy = response.header("x-powered-by");
+  if (poweredBy) findings.push(makeFinding(asset, "Tecnologia anunciada pelo servidor", "info", "Inventário tecnológico", "O cabeçalho X-Powered-By anuncia uma tecnologia; este dado pode não refletir a versão real.", `X-Powered-By: ${poweredBy.slice(0, 80)}`, "Confirme o inventário e evite divulgar detalhes de versão desnecessários."));
+  return findings;
+}
+
+export type AssessDeps = { config?: ScannerConfig; resolve?: Resolver; fetcher?: Fetcher };
+
+export async function assess(asset: Asset, deps: AssessDeps = {}): Promise<Finding[]> {
+  const config = deps.config ?? scannerConfig();
+  if (!config.enabled) throw new Error("Scanner desabilitado. Configure o ambiente antes de executar avaliações.");
+  const { url, addresses } = await validateTarget(asset.url, deps.resolve);
+  if (!isHostAllowed(url.hostname, config)) throw new Error("O hostname não consta na lista de alvos autorizados pelo operador.");
+  const response = await (deps.fetcher ?? pinnedFetch)(url, addresses[0]);
+  if (response.status >= 300 && response.status < 400) throw new Error("O alvo respondeu com redirecionamento; o MVP não segue redirects.");
+  return analyzeResponse(asset, response);
 }

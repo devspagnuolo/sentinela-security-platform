@@ -8,7 +8,7 @@ O avaliador confirma autorização formal do proprietário, hostnames exatos, ja
 
 1. Validar URL HTTPS e hostname DNS público.
 2. Conferir o hostname na lista explícita de alvos permitidos pelo operador.
-3. Enviar uma requisição GET à URL raiz com User-Agent identificável, timeout de 5 segundos e sem seguir redirecionamentos.
+3. Enviar uma requisição GET à URL raiz conectando ao IP validado no passo 1 (sem nova resolução DNS), com User-Agent identificável, timeout de 5 segundos, sem seguir redirecionamentos e encerrando a conexão após os cabeçalhos.
 4. Observar cabeçalhos de resposta: Content-Security-Policy, Strict-Transport-Security, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Access-Control-Allow-Origin, Set-Cookie, Server e X-Powered-By.
 5. Registrar apenas metadados necessários à evidência. Valores de cookies e corpo da resposta não entram no relatório.
 6. Revisar manualmente se o indicador representa risco real para o contexto do cliente.
@@ -21,4 +21,4 @@ A severidade automática é preliminar. O relatório entregue ao cliente deve in
 
 ## Limitações técnicas atuais
 
-A implementação ainda não fixa o endereço DNS validado na conexão, não limita bytes da resposta no transporte e não possui controle de taxa por cliente. Por isso, o scanner permanece desabilitado por padrão e o protótipo não deve ser usado em produção.
+A conexão é fixada no endereço validado e somente cabeçalhos (até 16 KB) são lidos; o corpo não é baixado. Ainda não há controle de taxa por cliente nem trilha de auditoria persistente. Por isso, o scanner permanece desabilitado por padrão e o protótipo não deve ser usado em produção.
