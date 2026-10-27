@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, Download, X } from "lucide-react";
 import { FINDING_STATUS_LABELS, SEVERITY_LABELS } from "@/lib/labels";
 import type { Asset, Finding, FindingEvent, FindingStatus, Severity } from "@/lib/types";
 
@@ -10,7 +10,7 @@ const SEVERITIES: Severity[] = ["critical", "high", "medium", "low", "info"];
 const date = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—";
 const inDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 
-export default function FindingsManager({ canTriage, canAccept }: { canTriage: boolean; canAccept: boolean }) {
+export default function FindingsManager({ canTriage, canAccept, canExport }: { canTriage: boolean; canAccept: boolean; canExport: boolean }) {
   const router = useRouter();
   const [findings, setFindings] = useState<Finding[]>([]), [assets, setAssets] = useState<Asset[]>([]);
   const [status, setStatus] = useState<FindingStatus | "">("open"), [severity, setSeverity] = useState<Severity | "">(""), [assetId, setAssetId] = useState("");
@@ -72,6 +72,7 @@ export default function FindingsManager({ canTriage, canAccept }: { canTriage: b
         <option value="">Todos os ativos</option>
         {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
       </select>
+      {canExport && <><a className="button button-secondary" href="/api/export?format=xlsx" title="Achados, ativos e avaliações em planilha"><Download size={15}/>XLSX</a><a className="button button-secondary" href="/api/export?format=csv"><Download size={15}/>CSV</a></>}
     </div>
     <div className="table-scroll">
       <table className="users-table findings-table"><thead><tr><th>Achado</th><th>Severidade</th><th>Ativo</th><th>Situação</th><th>Visto por último</th></tr></thead><tbody>

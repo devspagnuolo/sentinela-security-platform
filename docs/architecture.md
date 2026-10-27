@@ -32,7 +32,9 @@ A ausência de cabeçalho ou um banner é um indicador de configuração, não p
 
 ## Limites atuais
 
-Sem enumeração de cifras e versões TLS, DNSSEC, descoberta ampla, testes autenticados, cloud, PDF gerado no servidor ou IA. O protótipo não deve receber dados reais de clientes nem ser exposto publicamente até que os controles essenciais estejam implementados.
+Sem enumeração de cifras e versões TLS, DNSSEC, descoberta ampla, testes autenticados, cloud ou IA.
+
+Relatórios: `src/lib/report.ts` monta o conteúdo uma vez (`buildReport`), e JSON, HTML (`renderHtml`) e PDF (`src/lib/pdf.ts`, pdf-lib com as fontes padrão Helvetica, sem recursos externos) saem desse mesmo objeto. Caracteres fora do WinAnsi viram equivalentes ou "?". A exportação XLSX (`src/lib/xlsx.ts`) não usa dependências: gera o pacote OOXML com zlib e grava todo texto como `inlineStr`, que o Excel nunca avalia como fórmula. O protótipo não deve receber dados reais de clientes nem ser exposto publicamente até que os controles essenciais estejam implementados.
 
 ## Escopos e ciclo de vida dos achados
 
