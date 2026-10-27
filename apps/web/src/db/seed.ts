@@ -1,15 +1,25 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "./client";
-import { assessments, assets, findings, organizations } from "./schema";
+import { hashPassword } from "@/lib/auth/password";
+import { assessments, assets, findings, memberships, organizations, users } from "./schema";
 
 export const DEFAULT_ORG_SLUG = "default";
+export const DEMO_OWNER_EMAIL = "admin@sentinela.local";
 
-/** Cria a organização padrão com dados demonstrativos, se ainda não existir. Idempotente. */
-export async function seedDemo(db: Database) {
+/**
+ * Cria a organização padrão com dados demonstrativos, se ainda não existir. Idempotente.
+ * Com ownerPassword, cria também o Owner demonstrativo admin@sentinela.local.
+ */
+export async function seedDemo(db: Database, options: { ownerPassword?: string } = {}) {
   const existing = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.slug, DEFAULT_ORG_SLUG));
   if (existing.length) return existing[0].id;
+  const passwordHash = options.ownerPassword ? await hashPassword(options.ownerPassword) : undefined;
   return db.transaction(async tx => {
     const [org] = await tx.insert(organizations).values({ slug: DEFAULT_ORG_SLUG, name: "Minha consultoria" }).returning();
+    if (passwordHash) {
+      const [owner] = await tx.insert(users).values({ email: DEMO_OWNER_EMAIL, name: "Administrador demo", passwordHash, passwordChangedAt: new Date() }).returning();
+      await tx.insert(memberships).values({ organizationId: org.id, userId: owner.id, role: "owner" });
+    }
     const [portal, api] = await tx.insert(assets).values([
       { organizationId: org.id, name: "Portal institucional", url: "https://portal.example.com", kind: "Web application", owner: "Equipe Digital", approved: true, authorizationRef: "DEMO-2026-001" },
       { organizationId: org.id, name: "API de serviços", url: "https://api.example.com", kind: "API", owner: "Plataforma", approved: true, authorizationRef: "DEMO-2026-002" }

@@ -16,7 +16,8 @@ O relatório individual por ativo está disponível em JSON e HTML imprimível, 
 - Apenas URLs HTTPS com hostname DNS público são aceitas. IPs literais, redes privadas, loopback e portas alternativas são bloqueados.
 - Não há exploração, autenticação forçada, varredura de portas, crawling, escrita no alvo ou persistência de corpos de resposta.
 - A conexão usa o endereço IP validado na resolução DNS (sem nova consulta), o que impede DNS rebinding; apenas status e cabeçalhos são lidos, com limite de 16 KB, e o corpo nunca é baixado.
-- Ainda não há autenticação de operador (prevista para a próxima fase); não exponha a aplicação fora de uma rede confiável até lá. Não o exponha na internet nem use dados reais de clientes até concluir esses controles.
+- Todo acesso exige login. Senhas usam scrypt; sessões ficam no banco (só o hash do token), expiram em 12 h ou após 2 h sem uso, e o cookie é HttpOnly, SameSite=Lax e, em produção, Secure com prefixo `__Host-`. Após 5 senhas erradas seguidas a conta fica bloqueada por 15 minutos. Requisições que alteram dados precisam vir da mesma origem (proteção CSRF).
+- Papéis: **Owner** e **Admin** gerenciam usuários e leem a auditoria (Admin só gerencia Analistas e Leitores); **Analista** cadastra ativos, executa avaliações e exporta; **Leitor** só consulta ativos e relatórios. A organização sempre mantém ao menos um Owner ativo. Não o exponha na internet nem use dados reais de clientes até concluir esses controles.
 
 ## Fluxo previsto para a consultoria
 
@@ -42,6 +43,7 @@ Com PostgreSQL real (por exemplo, `docker compose up -d postgres`):
 copy .env.example apps\web\.env.local   # ajuste DATABASE_URL
 npm run db:migrate --workspace @sentinela/web
 npm run db:seed --workspace @sentinela/web     # opcional: dados demonstrativos
+npm run user:create-owner --workspace @sentinela/web -- voce@empresa.com "Seu Nome"
 npm run dev
 ```
 
@@ -56,13 +58,13 @@ npm test
 npm run build
 ```
 
-Abra http://localhost:3000. Os ativos novos só ficam aptos à avaliação quando o hostname consta na lista do operador e a autorização é confirmada no cadastro. Os dados e indicadores iniciais são apenas demonstrativos.
+Abra http://localhost:3000 e entre com `admin@sentinela.local` / `sentinela-demo-2026` (somente no banco embutido de desenvolvimento). Os ativos novos só ficam aptos à avaliação quando o hostname consta na lista do operador e a autorização é confirmada no cadastro. Os dados e indicadores iniciais são apenas demonstrativos.
 
 ## Próximos marcos
 
 O roadmap enterprise completo (multi-tenancy, RBAC, SSO, observabilidade e deploy) está em evolução; os marcos abaixo resumem a ordem.
 
-1. Autenticação, papéis (Owner, Admin, Analista, Leitor), MFA e SSO.
+1. MFA (TOTP) e SSO via OIDC (Google Workspace, Entra ID, Okta).
 2. Auditoria de execução e autorizações com janela de validade no banco.
 3. Verificações TLS, inventário passivo de tecnologias e conectores cloud read-only.
 4. Relatórios PDF/XLSX, revisão de achados e histórico de reavaliações.

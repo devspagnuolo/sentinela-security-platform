@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 // Toda tabela de negócio carrega organization_id: o isolamento entre organizações
 // é garantido na camada de repositório (src/db/repository.ts), que sempre filtra por ele.
@@ -29,6 +29,10 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   passwordHash: text("password_hash"),
   disabled: boolean("disabled").notNull().default(false),
+  failedLoginCount: integer("failed_login_count").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
   ...timestamps
 }, t => [uniqueIndex("users_email_lower_idx").on(sql`lower(${t.email})`)]);
 
@@ -39,6 +43,18 @@ export const memberships = pgTable("memberships", {
   role: roleEnum("role").notNull(),
   ...timestamps
 }, t => [uniqueIndex("memberships_org_user_idx").on(t.organizationId, t.userId)]);
+
+// O id da sessão é o SHA-256 do token do cookie: o token em si nunca é gravado.
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  organizationId: orgRef(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  ip: text("ip"),
+  userAgent: text("user_agent")
+}, t => [index("sessions_user_idx").on(t.userId), index("sessions_expires_idx").on(t.expiresAt)]);
 
 export const clients = pgTable("clients", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -106,6 +122,8 @@ export const findings = pgTable("findings", {
 // Trilha de auditoria somente de inserção; o repositório não expõe update/delete.
 export const auditLog = pgTable("audit_log", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Sequência monotônica: ordena eventos gravados no mesmo milissegundo.
+  seq: bigint("seq", { mode: "number" }).generatedAlwaysAsIdentity().notNull(),
   organizationId: orgRef(),
   actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
   action: text("action").notNull(),

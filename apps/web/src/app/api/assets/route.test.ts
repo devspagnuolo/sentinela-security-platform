@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { request, signIn } from "@/test/auth";
 
 vi.mock("@/lib/scanner", () => ({
   validateTarget: vi.fn(async (raw: string) => {
@@ -9,42 +10,65 @@ vi.mock("@/lib/scanner", () => ({
 }));
 
 const { GET, POST } = await import("./route");
+const ctx = {} as never;
+const valid = { url: "https://app.example.com", authorized: true, authorizationRef: "AUT-2026-01" };
+const post = (cookie: string | undefined, body: unknown, origin?: string | null) => POST(request("/api/assets", { cookie, body, origin }), ctx);
 
-const post = (body: unknown) => POST(new Request("http://localhost/api/assets", { method: "POST", headers: { "Content-Type": "application/json" }, body: typeof body === "string" ? body : JSON.stringify(body) }));
-
-describe("POST /api/assets", () => {
+describe("/api/assets", () => {
   beforeEach(() => { vi.unstubAllEnvs(); });
 
-  it("cadastra ativo e só aprova host presente na lista com scanner habilitado", async () => {
+  it("exige sessão", async () => {
+    expect((await GET(request("/api/assets"), ctx)).status).toBe(401);
+    expect((await post(undefined, valid)).status).toBe(401);
+  });
+
+  it("Leitor lista mas não cadastra", async () => {
+    const { cookie } = await signIn("viewer");
+    expect((await GET(request("/api/assets", { cookie }), ctx)).status).toBe(200);
+    expect((await post(cookie, valid)).status).toBe(403);
+  });
+
+  it("recusa escrita sem Origin ou de outra origem (CSRF)", async () => {
+    const { cookie } = await signIn("analyst");
+    expect((await post(cookie, valid, null)).status).toBe(403);
+    expect((await post(cookie, valid, "https://evil.example")).status).toBe(403);
+  });
+
+  it("Analista cadastra; aprovação depende da lista do operador; auditoria registra o autor", async () => {
     vi.stubEnv("SENTINELA_ENABLE_SCANNER", "1");
     vi.stubEnv("SENTINELA_ALLOWED_HOSTS", "app.example.com");
-    const res = await post({ url: "https://APP.example.com/x", authorized: true, authorizationRef: "AUT-2026-01" });
+    const { cookie, user } = await signIn("analyst");
+    const res = await post(cookie, { ...valid, url: "https://APP.example.com/x" });
     expect(res.status).toBe(201);
     const asset = await res.json();
     expect(asset).toMatchObject({ url: "https://app.example.com", name: "app.example.com", approved: true });
-    expect((await (await GET()).json())[0].id).toBe(asset.id);
+    const { getDb } = await import("@/db/client");
+    const { tenantRepository } = await import("@/db/repository");
+    const { organizationId } = (await (await import("@/lib/auth/session")).validateSession(await getDb(), cookie.split("=")[1]))!;
+    const [entry] = await tenantRepository(await getDb(), organizationId).listAudit(1);
+    expect(entry).toMatchObject({ action: "asset.created", targetId: asset.id, actorUserId: user.id });
   });
 
   it("não aprova quando o scanner está desabilitado", async () => {
     vi.stubEnv("SENTINELA_ALLOWED_HOSTS", "app.example.com");
-    const res = await post({ url: "https://app.example.com", authorized: true, authorizationRef: "AUT-2026-01" });
-    expect((await res.json()).approved).toBe(false);
+    const { cookie } = await signIn("analyst");
+    expect((await (await post(cookie, valid)).json()).approved).toBe(false);
   });
 
-  it("rejeita JSON inválido, autorização ausente e alvo não público", async () => {
-    expect((await post("{")).status).toBe(400);
-    const noAuth = await post({ url: "https://app.example.com", authorizationRef: "AUT-2026-01" });
+  it("valida entrada e alvo", async () => {
+    const { cookie } = await signIn("analyst");
+    expect((await post(cookie, "{")).status).toBe(400);
+    const noAuth = await post(cookie, { url: valid.url, authorizationRef: "AUT-2026-01" });
     expect(noAuth.status).toBe(400);
     expect((await noAuth.json()).error).toContain("autorização");
-    const internal = await post({ url: "https://db.internal", authorized: true, authorizationRef: "AUT-2026-01" });
-    expect(internal.status).toBe(400);
+    expect((await post(cookie, { ...valid, url: "https://db.internal" })).status).toBe(400);
   });
 
-  it("registra o cadastro na trilha de auditoria", async () => {
-    const res = await post({ url: "https://audit.example.com", authorized: true, authorizationRef: "AUT-2026-02" });
-    const asset = await res.json();
-    const { requestRepository } = await import("@/lib/tenant");
-    const [entry] = await (await requestRepository()).listAudit(1);
-    expect(entry).toMatchObject({ action: "asset.created", targetType: "asset", targetId: asset.id });
+  it("cada organização vê apenas os próprios ativos", async () => {
+    const a = await signIn("analyst");
+    const b = await signIn("analyst");
+    const created = await (await post(a.cookie, { ...valid, url: "https://so-de-a.example.com" })).json();
+    const listB = await (await GET(request("/api/assets", { cookie: b.cookie }), ctx)).json();
+    expect(listB.map((x: { id: string }) => x.id)).not.toContain(created.id);
   });
 });

@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
-import { seedDemo } from "./seed";
+import { DEMO_OWNER_EMAIL, seedDemo } from "./seed";
 
 export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 
@@ -24,7 +24,11 @@ export async function createDatabase(env: NodeJS.ProcessEnv = process.env): Prom
   const [{ drizzle }, { migrate }, { PGlite }] = await Promise.all([import("drizzle-orm/pglite"), import("drizzle-orm/pglite/migrator"), import("@electric-sql/pglite")]);
   const db = drizzle(new PGlite(env.SENTINELA_PGLITE_DIR), { schema });
   await migrate(db, { migrationsFolder: migrationsFolder() });
-  if (env.SENTINELA_SEED_DEMO !== "0") await seedDemo(db as unknown as Database);
+  if (env.SENTINELA_SEED_DEMO !== "0") {
+    const ownerPassword = env.SENTINELA_DEMO_PASSWORD ?? (env.NODE_ENV === "production" ? undefined : "sentinela-demo-2026");
+    await seedDemo(db as unknown as Database, { ownerPassword });
+    if (ownerPassword && env.NODE_ENV !== "test") console.info(`[sentinela] Banco embutido de demonstração. Login: ${DEMO_OWNER_EMAIL}`);
+  }
   return db as unknown as Database;
 }
 

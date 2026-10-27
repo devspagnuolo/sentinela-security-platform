@@ -85,7 +85,7 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
     },
 
     async listAudit(limit = 100): Promise<AuditEntry[]> {
-      const rows = await db.select().from(auditLog).where(own(auditLog)).orderBy(desc(auditLog.createdAt)).limit(Math.min(Math.max(limit, 1), 500));
+      const rows = await db.select().from(auditLog).where(own(auditLog)).orderBy(desc(auditLog.seq)).limit(Math.min(Math.max(limit, 1), 500));
       return rows.map(r => ({ id: r.id, action: r.action, targetType: r.targetType, targetId: r.targetId, actorUserId: r.actorUserId, metadata: r.metadata, createdAt: r.createdAt.toISOString() }));
     }
   };
