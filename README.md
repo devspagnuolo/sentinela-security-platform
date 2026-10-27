@@ -6,7 +6,7 @@ Ferramenta de uso individual para avaliações defensivas de sites e APIs de emp
 
 Este repositório contém uma aplicação Next.js com persistência em PostgreSQL (Drizzle ORM, migrações versionadas) e isolamento de dados por organização. Sem `DATABASE_URL`, o app usa um PostgreSQL embutido (PGlite) em memória com dados demonstrativos, que não representam clientes reais. Toda alteração relevante (cadastro, avaliação, relatório, exportação) é registrada numa trilha de auditoria consultável em `/api/audit`. O scanner faz apenas uma requisição HTTPS GET à raiz de um hostname aprovado, sem seguir redirecionamentos. Ele observa cabeçalhos HTTP, CORS, atributos de cookies e banners. Nessa mesma conexão, lê o certificado TLS (confiança, nome e vencimento). Além disso, consulta registros DNS públicos (CAA, SPF e DMARC) no resolvedor, sem tocar o alvo. Esses sinais são indicativos e precisam de análise contextual antes de serem apresentados como vulnerabilidades confirmadas.
 
-O relatório individual por ativo está disponível em JSON e HTML imprimível, com escopo, referência de autorização, método, limitações, achados, evidências e recomendações. No navegador, a versão HTML pode ser salva como PDF. Consulte [a metodologia](docs/methodology.md) e [o modelo de relatório](docs/report-template.md).
+O relatório individual por ativo está disponível em PDF (gerado no servidor), HTML imprimível e JSON, com escopo, referência de autorização, método, limitações, achados, evidências e recomendações. A organização pode exportar achados, ativos e avaliações em XLSX, CSV ou JSON. Na planilha, todo texto é gravado como texto literal, então conteúdo vindo de um alvo avaliado nunca vira fórmula. Consulte [a metodologia](docs/methodology.md) e [o modelo de relatório](docs/report-template.md).
 
 ## Autorização e limites
 
@@ -80,10 +80,9 @@ A imagem Docker (`Dockerfile`, compatível com x86 e ARM) e o compose de produç
 
 O roadmap enterprise segue nesta ordem:
 
-1. Relatórios PDF/XLSX.
-2. API com tokens e webhooks, incluindo notificações por e-mail e webhook.
-3. Controles de LGPD (retenção, exportação e exclusão de dados).
-4. Inventário passivo de tecnologias e conectores cloud read-only.
+1. API com tokens e webhooks, incluindo notificações por e-mail e webhook.
+2. Controles de LGPD (retenção, exportação e exclusão de dados).
+3. Inventário passivo de tecnologias e conectores cloud read-only.
 
 ## Licença
 

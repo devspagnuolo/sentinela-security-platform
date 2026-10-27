@@ -6,5 +6,5 @@ export const dynamic = "force-dynamic";
 
 export default async function FindingsPage() {
   const session = await requireSession("asset:read");
-  return <FindingsManager canTriage={can(session.role, "finding:triage")} canAccept={can(session.role, "finding:accept")} />;
+  return <FindingsManager canTriage={can(session.role, "finding:triage")} canAccept={can(session.role, "finding:accept")} canExport={can(session.role, "export:download")} />;
 }
