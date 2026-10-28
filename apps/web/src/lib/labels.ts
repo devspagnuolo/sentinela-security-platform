@@ -15,3 +15,17 @@ export function timeAgo(iso: string | null, now = Date.now()) {
   if (minutes < 48 * 60) return `há ${Math.round(minutes / 60)} h`;
   return `há ${Math.round(minutes / 1440)} dias`;
 }
+
+/** Categorias do inventário passivo de tecnologias (src/lib/fingerprint.ts). */
+export const TECHNOLOGY_CATEGORY_LABELS = {
+  server: "Servidor web",
+  framework: "Linguagem e framework",
+  platform: "Plataforma e CMS",
+  edge: "CDN, WAF e balanceador",
+  hosting: "Hospedagem",
+  certificate: "Autoridade certificadora",
+  email: "E-mail",
+  dns: "DNS"
+} as const;
+export type TechnologyCategory = keyof typeof TECHNOLOGY_CATEGORY_LABELS;
+export const technologyCategoryLabel = (category: string) => TECHNOLOGY_CATEGORY_LABELS[category as TechnologyCategory] ?? category;

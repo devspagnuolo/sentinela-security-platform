@@ -92,8 +92,9 @@ describe("assess", () => {
     const dns = { ns: vi.fn(async () => ["ns1.example.com"]), caa: vi.fn(async () => { throw empty; }), mx: vi.fn(async () => { throw empty; }), txt: vi.fn(async () => { throw empty; }) } as unknown as DnsLookup;
     const tls = { authorized: false, authorizationError: "CERT_HAS_EXPIRED", protocol: "TLSv1.3", issuer: "CA", validTo: "2026-01-01T00:00:00.000Z" };
     const fetcher = vi.fn(async () => ({ ...response(secureHeaders), tls }));
-    const findings = await assess(asset, { config: enabled, resolve: publicResolver, fetcher, dns });
+    const { findings, technologies } = await assess(asset, { config: enabled, resolve: publicResolver, fetcher, dns });
     expect(findings.map(f => f.title)).toEqual(["Certificado TLS não confiável", "Registro CAA ausente"]);
+    expect(technologies).toEqual([expect.objectContaining({ category: "certificate", name: "CA" })]);
     expect(fetcher).toHaveBeenCalledOnce();
     expect(dns.caa).toHaveBeenCalledWith("app.example.com");
   });

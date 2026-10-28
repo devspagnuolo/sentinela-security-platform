@@ -81,7 +81,7 @@ describe("autorizações de escopo", () => {
     expect(asset.scopeOk).toBe(true);
     expect((await ASSET(request("/api/assets", { cookie: analyst.cookie, body: { url: "https://legado.acme.example", authorizationId: scope.id } }), ctx)).status).toBe(400);
 
-    assess.mockResolvedValueOnce([{ title: "HSTS ausente", severity: "low", category: "HTTP Headers", description: "d", evidence: "e", recommendation: "r", references: [] }]);
+    assess.mockResolvedValueOnce({ findings: [{ title: "HSTS ausente", severity: "low", category: "HTTP Headers", description: "d", evidence: "e", recommendation: "r", references: [] }], technologies: [] });
     const queued = await ASSESS(request(`/api/assets/${asset.id}/assess`, { cookie: analyst.cookie, body: {} }), idCtx(asset.id));
     expect(queued.status).toBe(202);
     const { assessment } = await queued.json();

@@ -350,3 +350,22 @@ export const webhookDeliveries = pgTable("webhook_deliveries", {
   index("webhook_deliveries_queue_idx").on(t.nextAttemptAt).where(sql`${t.status} = 'pending'`),
   index("webhook_deliveries_webhook_idx").on(t.webhookId, t.createdAt)
 ]);
+
+// Inventário passivo de tecnologias por ativo (src/lib/fingerprint.ts). Uma linha por (ativo, categoria, nome);
+// `current` diz se apareceu na última avaliação concluída do ativo.
+export const assetTechnologies = pgTable("asset_technologies", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: orgRef(),
+  assetId: uuid("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+  category: text("category").notNull(),
+  name: text("name").notNull(),
+  version: text("version"),
+  evidence: text("evidence").notNull(),
+  current: boolean("current").notNull().default(true),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  lastAssessmentId: uuid("last_assessment_id").references(() => assessments.id, { onDelete: "set null" })
+}, t => [
+  uniqueIndex("asset_technologies_asset_tech_idx").on(t.assetId, t.category, t.name),
+  index("asset_technologies_org_idx").on(t.organizationId, t.category, t.name)
+]);

@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Database } from "./client";
 import { hashPassword } from "@/lib/auth/password";
 import { findingFingerprint } from "@/lib/scope";
-import { assessmentFindings, assessments, assets, authorizations, clients, findings, memberships, organizations, users } from "./schema";
+import { assessmentFindings, assessments, assets, assetTechnologies, authorizations, clients, findings, memberships, organizations, users } from "./schema";
 
 export const DEFAULT_ORG_SLUG = "default";
 export const DEMO_OWNER_EMAIL = "admin@sentinela.local";
@@ -44,6 +44,14 @@ export async function seedDemo(db: Database, options: { ownerPassword?: string }
     ];
     const rows = await tx.insert(findings).values(demo.map(f => ({ ...f, organizationId: org.id, fingerprint: findingFingerprint(f), lastAssessmentId: f.assessmentId }))).returning();
     await tx.insert(assessmentFindings).values(rows.map(r => ({ organizationId: org.id, assessmentId: r.assessmentId!, findingId: r.id, evidence: r.evidence })));
+    const tech = (assetId: string, lastAssessmentId: string, category: string, name: string, version: string | null, evidence: string) => ({ organizationId: org.id, assetId, lastAssessmentId, category, name, version, evidence, firstSeenAt: now, lastSeenAt: now });
+    await tx.insert(assetTechnologies).values([
+      tech(portal.id, runPortal.id, "server", "nginx", "1.24.0", "Server: nginx/1.24.0"),
+      tech(portal.id, runPortal.id, "framework", "PHP", "8.2.12", "X-Powered-By: PHP/8.2.12"),
+      tech(portal.id, runPortal.id, "certificate", "Let's Encrypt", null, "Emissor do certificado: Let's Encrypt"),
+      tech(api.id, runApi.id, "edge", "Cloudflare", null, "Cabeçalho cf-ray presente"),
+      tech(api.id, runApi.id, "certificate", "Let's Encrypt", null, "Emissor do certificado: Let's Encrypt")
+    ]);
     return org.id;
   });
 }

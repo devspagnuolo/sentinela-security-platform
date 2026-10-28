@@ -14,7 +14,7 @@ export const GET = withAuth("report:read", async ({ repo }, request, { params }:
   if (!asset) return NextResponse.json({ error: "Ativo não encontrado." }, { status: 404 });
   const latest = await repo.latestCompletedAssessment(id);
   if (!latest) return NextResponse.json({ error: "Nenhuma avaliação concluída para este ativo." }, { status: 404 });
-  const report = buildReport(asset, latest.run, latest.findings);
+  const report = buildReport(asset, latest.run, latest.findings, new Date(), await repo.listTechnologies({ assetId: id }));
   await repo.audit("report.generated", "asset", asset.id, { assessmentId: latest.run.id, format });
   const filename = `sentinela-report-${asset.name.normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "ativo"}-${report.generatedAt.slice(0, 10)}`;
   if (format === "json") return NextResponse.json(report, { headers: { "Cache-Control": "no-store", "Content-Disposition": `attachment; filename=${filename}.json` } });

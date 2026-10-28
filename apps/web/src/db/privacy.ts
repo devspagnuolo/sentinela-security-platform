@@ -4,7 +4,7 @@ import type { Database } from "./client";
 import { retentionView } from "./retention";
 import { ANONYMIZED_DOMAIN } from "./users";
 import {
-  apiTokens, assessmentFindings, assessments, assets, auditLog, authorizations, clients, findingEvents, findings, memberships,
+  apiTokens, assessmentFindings, assessments, assets, assetTechnologies, auditLog, authorizations, clients, findingEvents, findings, memberships,
   mfaChallenges, notifications, organizations, recoveryCodes, sessions, ssoConnections, ssoIdentities, users, webhooks
 } from "./schema";
 
@@ -105,7 +105,7 @@ export async function exportOrganization(db: Database, organizationId: string, n
   const tokenColumns = without(getTableColumns(apiTokens), "tokenHash");
   const webhookColumns = without(getTableColumns(webhooks), "secret");
   const ssoColumns = without(getTableColumns(ssoConnections), "clientSecret");
-  const [[org], members, clientRows, scopes, assetRows, runs, observed, findingRows, events, audit, hooks, tokens, [sso]] = await Promise.all([
+  const [[org], members, clientRows, scopes, assetRows, runs, observed, findingRows, events, audit, hooks, tokens, [sso], technologies] = await Promise.all([
     db.select().from(organizations).where(eq(organizations.id, organizationId)),
     db.select({ id: users.id, name: users.name, email: users.email, role: memberships.role, disabled: users.disabled, since: memberships.createdAt, lastLoginAt: users.lastLoginAt, mfaEnabledAt: users.totpEnabledAt })
       .from(memberships).innerJoin(users, eq(users.id, memberships.userId)).where(own(memberships.organizationId)).orderBy(asc(users.name)),
@@ -119,13 +119,14 @@ export async function exportOrganization(db: Database, organizationId: string, n
     db.select().from(auditLog).where(own(auditLog.organizationId)).orderBy(desc(auditLog.seq)).limit(ORG_EXPORT_AUDIT_LIMIT),
     db.select(webhookColumns).from(webhooks).where(own(webhooks.organizationId)),
     db.select(tokenColumns).from(apiTokens).where(own(apiTokens.organizationId)),
-    db.select(ssoColumns).from(ssoConnections).where(own(ssoConnections.organizationId))
+    db.select(ssoColumns).from(ssoConnections).where(own(ssoConnections.organizationId)),
+    db.select().from(assetTechnologies).where(own(assetTechnologies.organizationId))
   ]);
   if (!org) return undefined;
   return {
     generatedAt: now.toISOString(),
     organization: { id: org.id, name: org.name, slug: org.slug, requireMfa: org.requireMfa, createdAt: org.createdAt.toISOString(), retention: retentionView(org) },
-    members, clients: clientRows, scopes, assets: assetRows, assessments: runs, assessmentFindings: observed, findings: findingRows, findingEvents: events,
+    members, clients: clientRows, scopes, assets: assetRows, assessments: runs, assessmentFindings: observed, findings: findingRows, findingEvents: events, technologies,
     audit: { entries: audit, truncated: audit.length === ORG_EXPORT_AUDIT_LIMIT },
     webhooks: hooks, apiTokens: tokens, sso: sso ?? null
   };
