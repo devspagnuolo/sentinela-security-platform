@@ -78,3 +78,11 @@ export type Assessment = {
   findingIds: string[];
 };
 export type Notification = { id: string; kind: string; title: string; body: string; link: string | null; readAt: string | null; createdAt: string };
+
+/** Tecnologia identificada passivamente num ativo (src/lib/fingerprint.ts). */
+export type AssetTechnology = {
+  id: string; assetId: string; assetName: string; category: string; name: string; version: string | null; evidence: string;
+  /** Apareceu na última avaliação concluída do ativo. */
+  current: boolean;
+  firstSeenAt: string; lastSeenAt: string;
+};

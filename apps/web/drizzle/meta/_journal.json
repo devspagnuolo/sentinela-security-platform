@@ -64,6 +64,13 @@
       "when": 1793143799165,
       "tag": "0008_lgpd_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793145172003,
+      "tag": "0009_asset_technologies",
+      "breakpoints": true
     }
   ]
 }

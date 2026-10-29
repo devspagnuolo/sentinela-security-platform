@@ -102,7 +102,7 @@ export async function processRun(db: Database, run: Run, deps: WorkerDeps = {}) 
     await repo.audit("assessment.failed", "asset", asset.id, { error: message, assessmentId: run.id, attempts: run.attempts });
     return repo.failAssessment(run.id, message, now());
   }
-  await repo.completeAssessment(run.id, observed, now());
+  await repo.completeAssessment(run.id, observed.findings, now(), observed.technologies);
 }
 
 /** Processa jobs até a fila (vencida) esvaziar, com até `concurrency` execuções em paralelo. */

@@ -52,7 +52,7 @@ export function systemDns(timeout = 3000): DnsLookup {
 }
 
 /** Nome inexistente ou sem registros do tipo = vazio; demais erros (tempo limite, SERVFAIL) interrompem a verificação. */
-async function records<T>(query: Promise<T[]>): Promise<T[]> {
+export async function records<T>(query: Promise<T[]>): Promise<T[]> {
   try { return await query; } catch (error) {
     const code = (error as { code?: string }).code;
     if (code === "ENODATA" || code === "ENOTFOUND") return [];

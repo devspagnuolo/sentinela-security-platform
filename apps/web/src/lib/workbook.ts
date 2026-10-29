@@ -1,12 +1,12 @@
-import { ASSESSMENT_STATUS_LABELS, FINDING_STATUS_LABELS, SCHEDULE_LABELS, SCOPE_STATE_LABELS, SEVERITY_LABELS } from "./labels";
+import { ASSESSMENT_STATUS_LABELS, FINDING_STATUS_LABELS, SCHEDULE_LABELS, SCOPE_STATE_LABELS, SEVERITY_LABELS, technologyCategoryLabel } from "./labels";
 import { SEVERITY_ORDER } from "./report";
-import type { Assessment, Asset, Finding } from "./types";
+import type { Assessment, Asset, AssetTechnology, Finding } from "./types";
 import { buildXlsx, type Sheet } from "./xlsx";
 
 const when = (iso: string | null) => iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "";
 
-/** Planilha da organização: achados (com triagem), ativos e avaliações, com rótulos em português. */
-export function exportWorkbook(data: { assets: Asset[]; findings: Finding[]; assessments: Assessment[] }) {
+/** Planilha da organização: achados (com triagem), ativos, avaliações e tecnologias, com rótulos em português. */
+export function exportWorkbook(data: { assets: Asset[]; findings: Finding[]; assessments: Assessment[]; technologies?: AssetTechnology[] }) {
   const assetName = new Map(data.assets.map(a => [a.id, a.name]));
   const findings = [...data.findings].sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity));
   const sheets: Sheet[] = [
@@ -24,6 +24,11 @@ export function exportWorkbook(data: { assets: Asset[]; findings: Finding[]; ass
       name: "Avaliações",
       columns: [{ header: "Ativo", width: 24 }, { header: "Situação", width: 14 }, { header: "Origem", width: 18 }, { header: "Método", width: 20 }, { header: "Pedida em", width: 18 }, { header: "Concluída em", width: 18 }, { header: "Observados", width: 11 }, { header: "Novos", width: 9 }, { header: "Reabertos", width: 10 }, { header: "Corrigidos", width: 10 }, { header: "Erro", width: 40 }, { header: "ID", width: 38 }],
       rows: data.assessments.map(r => [r.assetName ?? assetName.get(r.assetId) ?? r.assetId, ASSESSMENT_STATUS_LABELS[r.status], r.trigger === "scheduled" ? "Agendada" : r.requestedBy?.name ?? "", r.method, when(r.createdAt), when(r.finishedAt), r.summary?.observed, r.summary?.created, r.summary?.reopened, r.summary?.resolved, r.error, r.id])
+    },
+    {
+      name: "Tecnologias",
+      columns: [{ header: "Ativo", width: 24 }, { header: "Categoria", width: 22 }, { header: "Tecnologia", width: 24 }, { header: "Versão anunciada", width: 16 }, { header: "Evidência", width: 50 }, { header: "Vista primeiro em", width: 18 }, { header: "Vista por último em", width: 18 }],
+      rows: (data.technologies ?? []).map(t => [t.assetName, technologyCategoryLabel(t.category), t.name, t.version, t.evidence, when(t.firstSeenAt), when(t.lastSeenAt)])
     }
   ];
   return buildXlsx(sheets);

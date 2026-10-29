@@ -53,7 +53,7 @@
 .modal-hint{font-size:10px;color:#7a5a1e;background:#fff9ec;border:1px solid #f1dfb8;border-radius:6px;padding:8px 10px;margin:4px 0 0}
 .modal-hint a{color:#176b53}
 a.all-findings{text-decoration:none}
-.scopes-page,.findings-page{max-width:1100px}
+.scopes-page,.findings-page,.inventory-page{max-width:1100px}
 .scope-form{width:100%}
 .scope-form textarea,.finding-detail textarea{padding:9px 11px;border:1px solid #cfdcd4;border-radius:8px;font:inherit;width:100%;resize:vertical}
 .scope-form label,.finding-detail label{width:100%}
@@ -67,7 +67,7 @@ a.all-findings{text-decoration:none}
 .state-pending,.state-scheduled,.status-accepted{background:#fff6e5;color:#94661c}
 .state-expired,.state-revoked,.status-open{background:#fdecec;color:#9b2c2c}
 .status-false_positive{background:#eef1f8;color:#4f5f8a}
-.findings-page select{padding:9px 11px;border:1px solid #cfdcd4;border-radius:8px;font:inherit}
+.findings-page select,.inventory-page select{padding:9px 11px;border:1px solid #cfdcd4;border-radius:8px;font:inherit}
 .findings-table tbody tr{cursor:pointer}
 .findings-table tbody tr:hover,.findings-table tbody tr.selected{background:#f4faf6}
 .finding-detail{width:100%}
@@ -104,3 +104,4 @@ a.all-findings{text-decoration:none}
 .table-scroll{width:100%;overflow-x:auto}
 .event-picker label{flex-wrap:wrap}
 @media (max-width:600px){.event-picker code{flex-basis:100%;padding-left:24px}}
+.checkbox-label{display:flex;align-items:center;gap:6px;font-size:14px;color:#3d5148}

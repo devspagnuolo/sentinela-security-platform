@@ -4,6 +4,7 @@ import { isIP, type LookupFunction } from "node:net";
 import type { TLSSocket } from "node:tls";
 import { analyzeTls, checkDns, systemDns, type DnsLookup, type TlsInfo } from "./checks";
 import { isHostAllowed, scannerConfig, type ScannerConfig } from "./config";
+import { detectFromDns, detectFromResponse, mergeTechnologies, type Technology } from "./fingerprint";
 import { isPublicAddress } from "./network";
 import type { Asset, Finding } from "./types";
 
@@ -20,9 +21,10 @@ const EXCLUSIONS = ["Exploração", "Teste de autenticação ou autorização", 
 /** Descrição de cada versão do método, para o relatório citar exatamente o que foi executado. */
 export const SCANNER_METHODS: Record<string, ScannerMethod> = {
   "SENTINELA-HTTP-001": { id: "SENTINELA-HTTP-001", name: "Inspeção não intrusiva de metadados HTTP", request: "Uma requisição HTTPS GET à raiz; sem seguir redirecionamentos; timeout de 5 segundos", checks: ["Headers defensivos", "CORS observado", "Atributos de cookies", "Banners Server e X-Powered-By"], exclusions: EXCLUSIONS },
-  "SENTINELA-WEB-002": { id: "SENTINELA-WEB-002", name: "Inspeção não intrusiva de HTTP, TLS e DNS", request: "Uma requisição HTTPS GET à raiz (o certificado é lido nessa mesma conexão); sem seguir redirecionamentos; timeout de 5 segundos; consultas DNS públicas ao resolvedor (CAA, MX, SPF, DMARC), sem contato adicional com o alvo", checks: ["Headers defensivos", "CORS observado", "Atributos de cookies", "Banners Server e X-Powered-By", "Confiança e validade do certificado TLS", "CAA, SPF e DMARC"], exclusions: [...EXCLUSIONS, "Enumeração de cifras ou versões de TLS"] }
+  "SENTINELA-WEB-002": { id: "SENTINELA-WEB-002", name: "Inspeção não intrusiva de HTTP, TLS e DNS", request: "Uma requisição HTTPS GET à raiz (o certificado é lido nessa mesma conexão); sem seguir redirecionamentos; timeout de 5 segundos; consultas DNS públicas ao resolvedor (CAA, MX, SPF, DMARC), sem contato adicional com o alvo", checks: ["Headers defensivos", "CORS observado", "Atributos de cookies", "Banners Server e X-Powered-By", "Confiança e validade do certificado TLS", "CAA, SPF e DMARC"], exclusions: [...EXCLUSIONS, "Enumeração de cifras ou versões de TLS"] },
+  "SENTINELA-WEB-003": { id: "SENTINELA-WEB-003", name: "Inspeção não intrusiva de HTTP, TLS e DNS, com inventário passivo", request: "Uma requisição HTTPS GET à raiz (o certificado é lido nessa mesma conexão); sem seguir redirecionamentos; timeout de 5 segundos; consultas DNS públicas ao resolvedor (NS, CAA, MX, SPF, DMARC), sem contato adicional com o alvo", checks: ["Headers defensivos", "CORS observado", "Atributos de cookies", "Banners Server e X-Powered-By", "Confiança e validade do certificado TLS", "CAA, SPF e DMARC", "Inventário de tecnologias pelos cabeçalhos, nomes de cookies, emissor do certificado, MX e NS"], exclusions: [...EXCLUSIONS, "Enumeração de cifras ou versões de TLS", "Busca de caminhos ou arquivos conhecidos para identificar tecnologias"] }
 };
-export const SCANNER_METHOD_ID = "SENTINELA-WEB-002";
+export const SCANNER_METHOD_ID = "SENTINELA-WEB-003";
 const USER_AGENT = "Sentinela-Authorized-Assessment/0.3";
 const TIMEOUT_MS = 5000;
 
@@ -120,7 +122,10 @@ export type AssessDeps = { config?: ScannerConfig; resolve?: Resolver; fetcher?:
 /** Falha de rede ao contatar o alvo (tempo limite, conexão recusada): vale tentar de novo mais tarde. */
 export class TransientAssessmentError extends Error {}
 
-export async function assess(asset: Pick<Asset, "url">, deps: AssessDeps = {}): Promise<Observation[]> {
+/** Resultado de uma execução: achados e o inventário passivo de tecnologias (mesmas observações, nenhum contato extra). */
+export type ScanResult = { findings: Observation[]; technologies: Technology[] };
+
+export async function assess(asset: Pick<Asset, "url">, deps: AssessDeps = {}): Promise<ScanResult> {
   const config = deps.config ?? scannerConfig();
   if (!config.enabled) throw new Error("Scanner desabilitado. Configure o ambiente antes de executar avaliações.");
   const { url, addresses } = await validateTarget(asset.url, deps.resolve);
@@ -130,5 +135,10 @@ export async function assess(asset: Pick<Asset, "url">, deps: AssessDeps = {}): 
     throw new TransientAssessmentError(error instanceof Error ? error.message : "Falha de rede ao contatar o alvo.");
   }
   if (response.status >= 300 && response.status < 400) throw new Error("O alvo respondeu com redirecionamento; o MVP não segue redirects.");
-  return [...analyzeResponse(asset, response), ...analyzeTls(response.tls, deps.now), ...await checkDns(url.hostname, deps.dns ?? systemDns())];
+  const dns = deps.dns ?? systemDns();
+  const [dnsFindings, dnsTechnologies] = await Promise.all([checkDns(url.hostname, dns), detectFromDns(url.hostname, dns)]);
+  return {
+    findings: [...analyzeResponse(asset, response), ...analyzeTls(response.tls, deps.now), ...dnsFindings],
+    technologies: mergeTechnologies(detectFromResponse(response), dnsTechnologies)
+  };
 }

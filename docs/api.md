@@ -37,6 +37,7 @@ Requisições com token não usam cookie, então não precisam do cabeçalho `Or
 | `GET /api/findings?status=open,accepted&assetId=` | Leitor | Achados |
 | `PATCH /api/findings/:id` | Analista | Triagem: `open`, `fixed` ou `false_positive` (com `reason`) |
 | `GET /api/findings/:id/events` | Leitor | Histórico de triagem |
+| `GET /api/technologies?assetId=&includeStale=1` | Leitor | Inventário passivo de tecnologias (por padrão, só o que apareceu na última avaliação de cada ativo) |
 | `GET /api/reports/:assetId?format=json\|html\|pdf` | Leitor | Relatório da última avaliação |
 | `GET /api/export?format=json\|csv\|xlsx` | Analista | Exportação de achados |
 
@@ -81,7 +82,7 @@ O corpo é sempre JSON. Exemplo:
   "organizationId": "1a2b…",
   "data": {
     "asset": { "id": "…", "name": "Portal", "url": "https://portal.cliente.com.br" },
-    "assessment": { "id": "…", "trigger": "scheduled", "method": "SENTINELA-WEB-002", "summary": { "observed": 7, "created": 1, "reopened": 0, "resolved": 2 }, "link": "https://sentinela.suaempresa.com.br/avaliacoes" },
+    "assessment": { "id": "…", "trigger": "scheduled", "method": "SENTINELA-WEB-003", "summary": { "observed": 7, "created": 1, "reopened": 0, "resolved": 2 }, "link": "https://sentinela.suaempresa.com.br/avaliacoes" },
     "newFindings": [{ "id": "…", "title": "Certificado TLS perto do vencimento", "severity": "medium", "category": "TLS" }]
   }
 }

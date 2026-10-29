@@ -16,7 +16,7 @@ async function assessedAsset(organizationId: string) {
   const asset = await repo.createAsset({ name: "Portal São João", url: "https://portal.example.com", kind: "Web application", owner: "TI", authorizationId: scope.id });
   await repo.recordAssessment(asset.id, "SENTINELA-WEB-002", new Date(), [
     { title: "Certificado TLS não confiável", severity: "high", category: "TLS", description: "Expirado → renovar 🔒", evidence: "CERT_HAS_EXPIRED", recommendation: "Renove.", references: ["CWE-295"] }
-  ]);
+  ], new Date(), [{ category: "server", name: "nginx", version: "1.24.0", evidence: "Server: nginx/1.24.0" }]);
   return asset;
 }
 
@@ -36,6 +36,8 @@ describe("relatórios e exportação", () => {
 
     const json = await (await GET(request(`/api/reports/${asset.id}?format=json`, { cookie }), idCtx(asset.id))).json();
     expect(json.assessment.method.id).toBe("SENTINELA-WEB-002");
+    expect(json.technologies).toEqual([{ category: "Servidor web", name: "nginx", version: "1.24.0", evidence: "Server: nginx/1.24.0" }]);
+    expect(await (await GET(request(`/api/reports/${asset.id}?format=html`, { cookie }), idCtx(asset.id))).text()).toContain("Tecnologias identificadas");
     expect((await GET(request(`/api/reports/${asset.id}?format=docx`, { cookie }), idCtx(asset.id))).status).toBe(400);
   });
 

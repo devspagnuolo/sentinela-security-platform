@@ -6,6 +6,7 @@ import { tenantRepository } from "@/db/repository";
 import { assessments, authorizations, findings, organizations } from "@/db/schema";
 import { memberRepository } from "@/db/users";
 import type { Role } from "./auth/rbac";
+import type { Technology } from "./fingerprint";
 import { TransientAssessmentError } from "./scanner";
 import { claimNext, drainQueue, housekeeping, MAX_ATTEMPTS, processRun, recoverStale, RETRY_BASE_MS, scheduleDue, STALE_AFTER_MS } from "./worker";
 
@@ -15,6 +16,7 @@ let db: Database;
 let n = 0;
 
 const observation = (title = "HSTS ausente", severity: "low" | "high" = "low") => ({ title, severity, category: "HTTP Headers", description: "d", evidence: "e", recommendation: "r", references: [] });
+const scan = (findings: ReturnType<typeof observation>[], technologies: Technology[] = []) => ({ findings, technologies });
 
 /** Organização com membros dos papéis pedidos, um escopo aprovado (*.example.com) e um ativo. */
 async function setup(roles: Role[] = ["owner", "analyst", "viewer"], validDays = 30) {
@@ -40,7 +42,7 @@ describe("fila de avaliações", () => {
     expect(again).toMatchObject({ queued: false, assessment: { id: first.assessment.id } });
     expect((await repo.getAsset(asset.id))?.lastAssessment).toMatchObject({ status: "queued" });
 
-    const assess = vi.fn(async () => [observation("CSP ausente", "high"), observation()]);
+    const assess = vi.fn(async () => scan([observation("CSP ausente", "high"), observation()]));
     expect(await drainQueue(db, { assess })).toBe(1);
     expect(assess).toHaveBeenCalledOnce();
     const done = await repo.getAssessment(first.assessment.id);
@@ -54,7 +56,7 @@ describe("fila de avaliações", () => {
 
     // Depois de concluída, uma nova avaliação pode ser enfileirada.
     expect((await repo.queueAssessment(asset.id, { method: M })).queued).toBe(true);
-    await drainQueue(db, { assess: async () => [observation("CSP ausente", "high"), observation()] });
+    await drainQueue(db, { assess: async () => scan([observation("CSP ausente", "high"), observation()]) });
     expect(await inbox(orgId, members.analyst.id).unreadCount()).toBe(1);
   });
 
@@ -123,7 +125,7 @@ describe("fila de avaliações", () => {
     const claimed = (await Promise.all([claimNext(db), claimNext(db), claimNext(db)])).filter(Boolean).map(r => r!.id);
     expect(new Set(claimed).size).toBe(claimed.length);
     expect(claimed.length).toBeGreaterThanOrEqual(2);
-    await drainQueue(db, { assess: async () => [] });
+    await drainQueue(db, { assess: async () => scan([]) });
   });
 });
 
@@ -141,7 +143,7 @@ describe("reavaliação agendada", () => {
     const [run] = await repo.listAssessments({ assetId: asset.id });
     expect(run).toMatchObject({ status: "queued", trigger: "scheduled", requestedBy: null });
     expect((await repo.getAsset(asset.id))?.nextAssessmentAt).toBe(new Date(due.getTime() + 7 * DAY).toISOString());
-    await drainQueue(db, { assess: async () => [] });
+    await drainQueue(db, { assess: async () => scan([]) });
 
     await repo.setSchedule(asset.id, null, now);
     expect(await repo.getAsset(asset.id)).toMatchObject({ scheduleIntervalDays: null, nextAssessmentAt: null });
@@ -179,5 +181,31 @@ describe("tarefas periódicas e avisos", () => {
     expect(await inbox(org.id, owner.id).markRead(["not-a-uuid"])).toBe(0);
     expect(await inbox(org.id, owner.id).markRead()).toBe(1);
     expect(await inbox(org.id, owner.id).unreadCount()).toBe(0);
+  });
+});
+
+describe("inventário de tecnologias", () => {
+  it("grava o que a avaliação identificou e marca como não atual o que deixou de aparecer", async () => {
+    const { asset, repo } = await setup(["analyst"]);
+    const nginx = (version: string): Technology => ({ category: "server", name: "nginx", version, evidence: `Server: nginx/${version}` });
+    const cloudflare: Technology = { category: "edge", name: "Cloudflare", version: null, evidence: "Cabeçalho cf-ray presente" };
+    await repo.queueAssessment(asset.id, { method: M });
+    await drainQueue(db, { assess: async () => scan([], [nginx("1.24.0"), cloudflare]) });
+    expect((await repo.listTechnologies({ assetId: asset.id })).map(t => `${t.name}@${t.version}`)).toEqual(["Cloudflare@null", "nginx@1.24.0"]);
+    const [firstNginx] = (await repo.listTechnologies({ assetId: asset.id })).filter(t => t.name === "nginx");
+
+    await repo.queueAssessment(asset.id, { method: M });
+    await drainQueue(db, { assess: async () => scan([], [nginx("1.26.1")]) });
+    const current = await repo.listTechnologies({ assetId: asset.id });
+    expect(current).toEqual([expect.objectContaining({ name: "nginx", version: "1.26.1", current: true, firstSeenAt: firstNginx.firstSeenAt, assetName: asset.name })]);
+    const all = await repo.listTechnologies({ assetId: asset.id, includeStale: true });
+    expect(all.map(t => `${t.name}:${t.current}`)).toEqual(["Cloudflare:false", "nginx:true"]);
+
+    // Avaliação que falha não mexe no inventário; outra organização não o enxerga.
+    await repo.queueAssessment(asset.id, { method: M });
+    await drainQueue(db, { assess: async () => { throw new Error("O hostname não consta na lista de alvos autorizados pelo operador."); } });
+    expect(await repo.listTechnologies({ assetId: asset.id })).toHaveLength(1);
+    const other = await setup(["analyst"]);
+    expect(await other.repo.listTechnologies({ assetId: asset.id })).toEqual([]);
   });
 });

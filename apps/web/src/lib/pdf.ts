@@ -125,6 +125,12 @@ export async function renderPdf(report: Report): Promise<Uint8Array> {
   w.y -= 24;
   w.text(`${report.summary.total} achado(s) observados nesta execução. Classificação automática preliminar; revisão humana obrigatória.`, { color: MUTED });
 
+  if (report.technologies.length) {
+    w.heading("Tecnologias identificadas");
+    w.text("Indicativo: é o que o alvo anuncia nos cabeçalhos, no certificado e no DNS, não necessariamente o que roda por trás.", { color: MUTED });
+    for (const t of report.technologies) w.field(`${t.name}${t.version ? ` ${t.version}` : ""}`, `${t.category} · ${t.evidence}`, 8);
+  }
+
   w.heading("Achados técnicos");
   if (!report.findings.length) w.text("Nenhum achado nesta avaliação limitada.");
   report.findings.forEach((f, i) => {

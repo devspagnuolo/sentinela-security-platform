@@ -1,12 +1,13 @@
 import { aliasedTable, and, asc, count, desc, eq, inArray, like, lt, sql, type Column, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { evaluateScope, findingFingerprint, SCOPE_MESSAGES, scopeState } from "@/lib/scope";
-import type { Asset, Assessment, AssessmentSummary, Authorization, Finding, FindingEvent, FindingStatus } from "@/lib/types";
+import type { Technology } from "@/lib/fingerprint";
+import type { Asset, Assessment, AssessmentSummary, AssetTechnology, Authorization, Finding, FindingEvent, FindingStatus } from "@/lib/types";
 import type { Database } from "./client";
 import { notify } from "./notifications";
 import { emitEvent } from "./webhooks";
 import { appLink } from "@/lib/webhooks";
-import { assessmentFindings, assessments, assets, auditLog, authorizations, clients, findingEvents, findings, users } from "./schema";
+import { assessmentFindings, assessments, assets, assetTechnologies, auditLog, authorizations, clients, findingEvents, findings, users } from "./schema";
 
 type NewAsset = { name: string; url: string; kind: Asset["kind"]; owner: string; authorizationId: string };
 type NewFinding = Pick<Finding, "title" | "severity" | "category" | "description" | "evidence" | "recommendation" | "references">;
@@ -141,6 +142,15 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
     if (events.length) await tx.insert(findingEvents).values(events);
     const summary: AssessmentSummary = { observed: rows.length, created, reopened, resolved };
     return { rows, summary, urgent, createdRows };
+  }
+
+  /** Atualiza o inventário do ativo com o que a execução observou; o que não apareceu continua listado, mas deixa de ser atual. */
+  async function updateInventory(tx: Database, runId: string, assetId: string, observed: Technology[], now: Date) {
+    await tx.update(assetTechnologies).set({ current: false }).where(and(own(assetTechnologies), eq(assetTechnologies.assetId, assetId)));
+    for (const t of observed) {
+      await tx.insert(assetTechnologies).values({ organizationId, assetId, category: t.category, name: t.name, version: t.version, evidence: t.evidence, current: true, firstSeenAt: now, lastSeenAt: now, lastAssessmentId: runId })
+        .onConflictDoUpdate({ target: [assetTechnologies.assetId, assetTechnologies.category, assetTechnologies.name], set: { version: t.version, evidence: t.evidence, current: true, lastSeenAt: now, lastAssessmentId: runId } });
+    }
   }
 
   /** Avisa a operação quando a execução trouxe algo que pede ação (achado alto/crítico novo ou reaberto). */
@@ -372,7 +382,7 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
     },
 
     /** Conclui uma execução da fila (status running) e consolida os achados observados. */
-    async completeAssessment(runId: string, observed: NewFinding[], now = new Date()) {
+    async completeAssessment(runId: string, observed: NewFinding[], now = new Date(), technologies?: Technology[]) {
       const [run] = await db.select().from(assessments).where(and(own(assessments), eq(assessments.id, runId)));
       if (!run || run.status !== "running") throw new RepositoryError("Execução não está em andamento.", 409);
       const asset = await this.getAsset(run.assetId);
@@ -380,6 +390,7 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
       await expireAcceptances(now);
       const { rows, summary, urgent, createdRows } = await db.transaction(async tx => {
         const result = await consolidate(tx as unknown as Database, runId, run.assetId, observed, now);
+        if (technologies) await updateInventory(tx as unknown as Database, runId, run.assetId, technologies, now);
         await tx.update(assessments).set({ status: "completed", finishedAt: now, lockedAt: null, error: null, summary: result.summary }).where(eq(assessments.id, runId));
         await tx.insert(auditLog).values({ organizationId, actorUserId, action: "assessment.completed", targetType: "asset", targetId: run.assetId, metadata: { assessmentId: runId, ...result.summary, method: run.method, trigger: run.trigger } });
         return result;
@@ -404,13 +415,14 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
     },
 
     /** Grava uma execução já feita (fora da fila: dados demonstrativos e testes) e consolida os achados. */
-    async recordAssessment(assetId: string, method: string, startedAt: Date, observed: NewFinding[], now = new Date()) {
+    async recordAssessment(assetId: string, method: string, startedAt: Date, observed: NewFinding[], now = new Date(), technologies?: Technology[]) {
       const asset = await this.getAsset(assetId);
       if (!asset) throw new Error("Ativo não encontrado.");
       await expireAcceptances(now);
       const result = await db.transaction(async tx => {
         const [run] = await tx.insert(assessments).values({ organizationId, assetId, status: "completed", method, requestedBy: actorUserId, attempts: 1, createdAt: startedAt, startedAt, finishedAt: now }).returning();
         const consolidated = await consolidate(tx as unknown as Database, run.id, assetId, observed, now);
+        if (technologies) await updateInventory(tx as unknown as Database, run.id, assetId, technologies, now);
         await tx.update(assessments).set({ summary: consolidated.summary }).where(eq(assessments.id, run.id));
         await tx.insert(auditLog).values({ organizationId, actorUserId, action: "assessment.completed", targetType: "asset", targetId: assetId, metadata: { assessmentId: run.id, ...consolidated.summary, method } });
         return { run: { ...run, summary: consolidated.summary }, ...consolidated };
@@ -428,6 +440,22 @@ export function tenantRepository(db: Database, organizationId: string, actorUser
         .innerJoin(findings, eq(findings.id, assessmentFindings.findingId))
         .where(and(own(assessmentFindings), eq(assessmentFindings.assessmentId, run.id))).orderBy(desc(findings.discoveredAt));
       return { run: toAssessment(run, { findingIds: rows.map(r => r.finding.id) }), findings: rows.map(r => toFinding(r.finding, r.evidence)) };
+    },
+
+    // ---- Inventário de tecnologias ---------------------------------------------
+
+    /** Tecnologias identificadas nos ativos; por padrão só as atuais (vistas na última avaliação). */
+    async listTechnologies(filter: { assetId?: string; includeStale?: boolean } = {}): Promise<AssetTechnology[]> {
+      const conditions: SQL[] = [own(assetTechnologies)];
+      if (filter.assetId) { if (!isUuid(filter.assetId)) return []; conditions.push(eq(assetTechnologies.assetId, filter.assetId)); }
+      if (!filter.includeStale) conditions.push(eq(assetTechnologies.current, true));
+      const rows = await db.select({ t: assetTechnologies, assetName: assets.name }).from(assetTechnologies)
+        .innerJoin(assets, eq(assets.id, assetTechnologies.assetId)).where(and(...conditions))
+        .orderBy(asc(assetTechnologies.category), asc(assetTechnologies.name), asc(assets.name));
+      return rows.map(({ t, assetName }) => ({
+        id: t.id, assetId: t.assetId, assetName, category: t.category, name: t.name, version: t.version, evidence: t.evidence,
+        current: t.current, firstSeenAt: t.firstSeenAt.toISOString(), lastSeenAt: t.lastSeenAt.toISOString()
+      }));
     },
 
     // ---- Auditoria --------------------------------------------------------------
