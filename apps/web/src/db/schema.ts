@@ -369,3 +369,41 @@ export const assetTechnologies = pgTable("asset_technologies", {
   uniqueIndex("asset_technologies_asset_tech_idx").on(t.assetId, t.category, t.name),
   index("asset_technologies_org_idx").on(t.organizationId, t.category, t.name)
 ]);
+
+// Conector de nuvem somente leitura (src/lib/cloud.ts). As credenciais ficam cifradas (src/lib/crypto.ts).
+export const cloudConnectors = pgTable("cloud_connectors", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: orgRef(),
+  provider: text("provider").notNull(),
+  name: text("name").notNull(),
+  credentials: text("credentials").notNull(),
+  // Pedaço da credencial para reconhecê-la na interface (ex.: "AKIA…WXYZ").
+  credentialHint: text("credential_hint").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  // Sincronização: o worker pega os vencidos com FOR UPDATE SKIP LOCKED, como nas outras filas.
+  nextSyncAt: timestamp("next_sync_at", { withTimezone: true }).notNull().defaultNow(),
+  syncLockedAt: timestamp("sync_locked_at", { withTimezone: true }),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  zoneCount: integer("zone_count"),
+  hostCount: integer("host_count"),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps
+}, t => [index("cloud_connectors_org_idx").on(t.organizationId), index("cloud_connectors_due_idx").on(t.nextSyncAt).where(sql`${t.enabled}`)]);
+
+// Hostnames encontrados nas zonas DNS dos conectores. Descobrir não autoriza avaliar: isso continua exigindo escopo aprovado.
+export const discoveredHosts = pgTable("discovered_hosts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: orgRef(),
+  connectorId: uuid("connector_id").notNull().references(() => cloudConnectors.id, { onDelete: "cascade" }),
+  hostname: text("hostname").notNull(),
+  zone: text("zone").notNull(),
+  recordTypes: text("record_types").array().notNull(),
+  targets: text("targets").array().notNull(),
+  // Só aponta para IPs privados.
+  internal: boolean("internal").notNull().default(false),
+  // Apareceu na última sincronização do conector.
+  current: boolean("current").notNull().default(true),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow()
+}, t => [uniqueIndex("discovered_hosts_connector_host_idx").on(t.connectorId, t.hostname), index("discovered_hosts_org_idx").on(t.organizationId, t.hostname)]);

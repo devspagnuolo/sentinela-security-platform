@@ -132,3 +132,17 @@ export const retentionSchema = z.object({
 }).refine(v => Object.values(v).some(x => x !== undefined), "Nada para alterar.");
 
 export const anonymizeSchema = z.object({ confirmEmail: z.string().trim().min(1, "Digite o e-mail da pessoa para confirmar.").max(320) });
+
+// Conectores de nuvem: só credenciais de leitura (docs/conectores.md explica as permissões mínimas).
+const cloudCredentials = z.discriminatedUnion("provider", [
+  z.object({ provider: z.literal("cloudflare"), apiToken: z.string().trim().regex(/^[A-Za-z0-9_-]{20,200}$/, "Token da Cloudflare inválido.") }),
+  z.object({
+    provider: z.literal("aws_route53"),
+    accessKeyId: z.string().trim().regex(/^AKIA[A-Z0-9]{16}$/, "Access key ID inválida (use a chave de um usuário IAM, que começa com AKIA)."),
+    secretAccessKey: z.string().trim().regex(/^[A-Za-z0-9/+=]{40}$/, "Secret access key inválida.")
+  })
+], { error: "Provedor não suportado." });
+const connectorName = z.string().trim().min(2, "Dê um nome ao conector.").max(80);
+export const connectorSchema = z.object({ name: connectorName, credentials: cloudCredentials });
+export const connectorUpdateSchema = z.object({ name: connectorName.optional(), enabled: z.boolean().optional(), credentials: cloudCredentials.optional() })
+  .refine(v => Object.values(v).some(x => x !== undefined), "Nada para alterar.");

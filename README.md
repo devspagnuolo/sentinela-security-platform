@@ -78,6 +78,10 @@ Integrações autenticam com **tokens de API** pessoais, criados em **Minha cont
 
 Com SMTP configurado (`SENTINELA_SMTP_URL` e `SENTINELA_MAIL_FROM`), os avisos do sino também chegam por e-mail. Cada pessoa pode desligar os e-mails em **Minha conta**, e Admins enviam um e-mail de teste em **Integrações**. Sem essa configuração, os avisos ficam só na aplicação.
 
+## Conectores de nuvem
+
+Admins e Owners ligam conectores **somente leitura** do Cloudflare e do AWS Route 53 em **Integrações**. O Sentinela lê as zonas DNS uma vez por dia, lista os hostnames em **Descoberta pela nuvem** e avisa quando aparece algo fora de qualquer escopo aprovado. A descoberta não autoriza avaliação: o hostname precisa virar ativo sob um escopo aprovado. Permissões mínimas por provedor em [docs/conectores.md](docs/conectores.md).
+
 ## LGPD
 
 O Owner define em **Minha conta** por quanto tempo ficam a auditoria (mínimo de 6 meses), as avaliações antigas, os achados encerrados e o contato de emergência de escopos encerrados, e o worker apaga o que passou do prazo. Cada pessoa baixa os próprios dados em JSON, o Owner exporta a organização inteira e pode anonimizar quem saiu, mantendo as ações na auditoria sem identificar a pessoa. Inventário de dados, prazos e como atender cada direito do titular estão em [docs/lgpd.md](docs/lgpd.md).
@@ -91,7 +95,7 @@ A imagem Docker (`Dockerfile`, compatível com x86 e ARM) e o compose de produç
 O roadmap enterprise segue nesta ordem:
 
 1. Controles de LGPD (retenção, exportação e exclusão de dados).
-2. Inventário passivo de tecnologias e conectores cloud read-only.
+2. Inventário passivo de tecnologias e conectores cloud read-only (concluído).
 
 ## Licença
 

@@ -56,11 +56,11 @@ Proteções: ninguém anonimiza a própria conta, a organização mantém ao men
 
 ## Exportação da organização
 
-`GET /api/organization/export` (Owner) devolve um JSON com organização e prazos, membros, clientes, escopos, ativos, avaliações, evidências, achados, histórico de triagem, até 50.000 eventos de auditoria, webhooks (sem o segredo), metadados de tokens (sem o hash) e a configuração de SSO (sem o client secret). A exportação fica registrada na auditoria.
+`GET /api/organization/export` (Owner) devolve um JSON com organização e prazos, membros, clientes, escopos, ativos, avaliações, evidências, achados, histórico de triagem, até 50.000 eventos de auditoria, webhooks (sem o segredo), metadados de tokens (sem o hash) a configuração de SSO (sem o client secret), os conectores de nuvem (sem a credencial) e os hostnames descobertos. A exportação fica registrada na auditoria.
 
 ## Segurança (art. 46)
 
-- Senhas com scrypt. Segredos TOTP, de SSO e de webhooks cifrados com AES-256-GCM (`SENTINELA_ENCRYPTION_KEY`).
+- Senhas com scrypt. Segredos TOTP, de SSO, de webhooks e credenciais dos conectores de nuvem cifrados com AES-256-GCM (`SENTINELA_ENCRYPTION_KEY`).
 - Sessões e tokens guardados só como SHA-256.
 - MFA por TOTP e SSO via OIDC, com política de MFA obrigatório por organização.
 - Isolamento por organização em toda consulta (`organization_id`).

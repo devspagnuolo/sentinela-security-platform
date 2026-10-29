@@ -2,6 +2,7 @@ import { and, asc, eq, gt, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { notify, pruneNotifications, sendPendingEmails } from "@/db/notifications";
 import { scopeEvent, tenantRepository } from "@/db/repository";
+import { syncDueConnectors } from "@/db/connectors";
 import { applyRetention } from "@/db/retention";
 import { drainDeliveries, emitEvent, pruneDeliveries } from "@/db/webhooks";
 import { assessments, assets, authorizations, findings } from "@/db/schema";
@@ -156,6 +157,8 @@ export function startWorker(getDb: () => Promise<Database>, settings = workerSet
       // Webhooks por último: inclui os eventos que as avaliações deste ciclo acabaram de gerar.
       await drainDeliveries(db);
       if (mailSettings().enabled) await sendPendingEmails(db);
+      // Conectores de nuvem: cada um sincroniza uma vez por dia (só leitura de zonas DNS).
+      await syncDueConnectors(db);
     } catch (error) {
       logger.error("assessment.worker_tick_failed", { error });
     } finally {
