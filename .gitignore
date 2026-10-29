@@ -11,3 +11,5 @@ next-env.d.ts
 .data
 deploy/.env
 deploy/backups
+test-results
+playwright-report

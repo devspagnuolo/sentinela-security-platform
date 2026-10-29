@@ -46,6 +46,43 @@ jobs:
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
 
+  e2e:
+    # Fluxos completos no navegador contra o build de produção e um PostgreSQL vazio.
+    # O scanner fica desligado: nenhum teste contata alvos externos.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sentinela_e2e
+          POSTGRES_USER: sentinela
+          POSTGRES_PASSWORD: sentinela_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sentinela -d sentinela_e2e"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgres://sentinela:sentinela_ci@localhost:5432/sentinela_e2e
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx --workspace @sentinela/web playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:e2e --workspace @sentinela/web
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
   docker:
     # Garante que a imagem de produção continua construindo (x86; na VM ARM o build é nativo).
     runs-on: ubuntu-latest

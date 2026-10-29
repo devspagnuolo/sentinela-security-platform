@@ -60,6 +60,15 @@ npm test
 npm run build
 ```
 
+Os testes de ponta a ponta (Playwright) percorrem login, verificação em duas etapas, escopo com aprovação de outra pessoa, triagem de achados, relatórios e layout de celular contra o build de produção. Eles precisam de um PostgreSQL **vazio** e não fazem nenhuma requisição a alvos externos:
+
+```powershell
+npx --workspace @sentinela/web playwright install chromium   # uma vez
+$env:DATABASE_URL = "postgres://usuario:senha@localhost:5432/sentinela_e2e"
+npm run build
+npm run test:e2e --workspace @sentinela/web
+```
+
 Abra http://localhost:3000 e entre com `admin@sentinela.local` / `sentinela-demo-2026` (somente no banco embutido de desenvolvimento). Os ativos novos só ficam aptos à avaliação quando o hostname consta na lista do operador e a autorização é confirmada no cadastro. Os dados e indicadores iniciais são apenas demonstrativos.
 
 ## Achados e triagem
