@@ -38,10 +38,11 @@ Requisições com token não usam cookie, então não precisam do cabeçalho `Or
 | `PATCH /api/findings/:id` | Analista | Triagem: `open`, `fixed` ou `false_positive` (com `reason`) |
 | `GET /api/findings/:id/events` | Leitor | Histórico de triagem |
 | `GET /api/technologies?assetId=&includeStale=1` | Leitor | Inventário passivo de tecnologias (por padrão, só o que apareceu na última avaliação de cada ativo) |
+| `GET /api/discovery?includeStale=1` | Leitor | Hostnames descobertos pelos conectores de nuvem, com a situação (`asset`, `in_scope`, `out_of_scope`, `internal`) |
 | `GET /api/reports/:assetId?format=json\|html\|pdf` | Leitor | Relatório da última avaliação |
 | `GET /api/export?format=json\|csv\|xlsx` | Analista | Exportação de achados |
 
-As demais rotas (conta, MFA, usuários, organização, SSO, auditoria, notificações, tokens e webhooks) exigem uma pessoa logada na interface. As decisões de gestão também ficam fora do alcance dos tokens: aprovar ou revogar escopo, aceitar risco e administrar usuários.
+As demais rotas (conta, MFA, usuários, organização, SSO, auditoria, notificações, tokens, webhooks e conectores de nuvem) exigem uma pessoa logada na interface. As decisões de gestão também ficam fora do alcance dos tokens: aprovar ou revogar escopo, aceitar risco e administrar usuários.
 
 ### Exemplo: falhar o pipeline com achado crítico
 
@@ -68,6 +69,7 @@ Admins e Owners cadastram webhooks em **Integrações**, com a URL HTTPS e os ev
 | `scope.approved` | Escopo aprovado. |
 | `scope.revoked` | Escopo revogado, com o motivo. |
 | `scope.expiring` | Escopo vence em até 14 dias. É enviado uma vez por autorização. |
+| `discovery.hosts_found` | Uma sincronização de conector de nuvem encontrou hostnames novos (até 100, com a situação de cada um). |
 | `webhook.test` | Só pelo botão **Testar**. |
 
 ### Formato

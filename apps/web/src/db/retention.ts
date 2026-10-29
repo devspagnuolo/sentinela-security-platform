@@ -3,7 +3,7 @@ import { purgeExpiredSessions } from "@/lib/auth/session";
 import { logger } from "@/lib/logger";
 import type { RetentionSettings } from "@/lib/retention-options";
 import type { Database } from "./client";
-import { assessments, auditLog, authorizations, findings, mfaChallenges, organizations, ssoRequests } from "./schema";
+import { assessments, auditLog, authorizations, discoveredHosts, findings, mfaChallenges, organizations, ssoRequests } from "./schema";
 
 /**
  * Retenção por organização (LGPD, art. 15 e 16: dados são eliminados quando
@@ -63,6 +63,8 @@ export async function applyRetention(db: Database, now = new Date()) {
   await purgeExpiredSessions(db, now);
   await db.delete(mfaChallenges).where(lt(mfaChallenges.expiresAt, now));
   await db.delete(ssoRequests).where(lt(ssoRequests.expiresAt, now));
+  // Hostnames que sumiram das zonas DNS há mais de 90 dias.
+  await db.delete(discoveredHosts).where(and(eq(discoveredHosts.current, false), lt(discoveredHosts.lastSeenAt, before(now, 90))));
   const orgs = await db.select().from(organizations);
   for (const org of orgs) {
     try {

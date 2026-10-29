@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Copy, Mail, Plus, Send, Webhook as WebhookIcon } from "lucide-react";
 import type { ApiToken } from "@/lib/auth/tokens";
+import CloudConnectors from "./cloud-connectors";
 import { ROLE_LABELS } from "@/lib/auth/rbac";
 import type { Webhook, WebhookDelivery } from "@/db/webhooks";
 import { WEBHOOK_EVENT_TYPES, WEBHOOK_EVENTS, type WebhookEvent } from "@/lib/webhook-events";
@@ -128,6 +129,8 @@ export default function IntegrationsManager({ canManageTokens, mail }: { canMana
           <td>{d.status === "delivered" ? `HTTP ${d.responseStatus}` : d.lastError ?? "—"}{d.status === "pending" && d.attempts > 0 && <><br/><small className="hint">Nova tentativa {when(d.nextAttemptAt)}</small></>}</td></tr>)}
       </tbody></table></div> : <p className="hint">Nenhuma entrega nos últimos 30 dias.</p>)}
     </section>)}
+
+    <CloudConnectors />
 
     {canManageTokens && <section className="account-card">
       <h2>Tokens de API da organização</h2>

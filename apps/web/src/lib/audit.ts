@@ -1,5 +1,5 @@
 /** Categorias de evento de auditoria (prefixo da ação) e rótulos para a interface. */
-export const AUDIT_CATEGORIES = { auth: "Acesso", user: "Usuários", sso: "SSO", organization: "Organização", scope: "Escopos", asset: "Ativos", assessment: "Avaliações", finding: "Achados", report: "Relatórios", export: "Exportações", token: "Tokens de API", webhook: "Webhooks", email: "E-mail" } as const;
+export const AUDIT_CATEGORIES = { auth: "Acesso", user: "Usuários", sso: "SSO", organization: "Organização", scope: "Escopos", asset: "Ativos", assessment: "Avaliações", finding: "Achados", report: "Relatórios", export: "Exportações", token: "Tokens de API", webhook: "Webhooks", email: "E-mail", connector: "Conectores de nuvem" } as const;
 export type AuditCategory = keyof typeof AUDIT_CATEGORIES;
 export const isAuditCategory = (value: string): value is AuditCategory => Object.hasOwn(AUDIT_CATEGORIES, value);
 
@@ -51,6 +51,10 @@ const ACTION_LABELS: Record<string, string> = {
   "webhook.tested": "Webhook testado",
   "webhook.disabled": "Webhook desligado por falhas",
   "user.preferences_updated": "Preferências alteradas",
-  "email.tested": "E-mail de teste enviado"
+  "email.tested": "E-mail de teste enviado",
+  "connector.created": "Conector de nuvem cadastrado",
+  "connector.updated": "Conector de nuvem alterado",
+  "connector.deleted": "Conector de nuvem removido",
+  "connector.synced": "Conector de nuvem sincronizado"
 };
 export const actionLabel = (action: string) => ACTION_LABELS[action] ?? action;
